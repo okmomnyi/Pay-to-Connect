@@ -1,0 +1,151 @@
+# HTTP to HTTPS redirect
+server {
+    listen 80;
+    server_name _;
+    return 301 https://$host$request_uri;
+}
+
+# Main HTTPS server
+server {
+    listen 443 ssl http2;
+    server_name _;
+
+    # SSL Configuration
+    ssl_certificate /etc/nginx/ssl/cert.pem;
+    ssl_certificate_key /etc/nginx/ssl/key.pem;
+
+    # Security headers
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com; font-src 'self' https://cdnjs.cloudflare.com; img-src 'self' data: https:; connect-src 'self';" always;
+
+    # Root directory for static files
+    root /var/www/html;
+    index index.html;
+
+    # Captive portal detection endpoints
+    location = /generate_204 {
+        return 204;
+    }
+
+    location = /hotspot-detect.html {
+        return 302 https://$host/portal;
+    }
+
+    location = /connecttest.txt {
+        return 302 https://$host/portal;
+    }
+
+    # Portal static files
+    location /portal {
+        alias /var/www/html;
+        try_files $uri $uri/ /index.html;
+        
+        # Cache static assets
+        location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg)$ {
+            expires 1y;
+            add_header Cache-Control "public, immutable";
+        }
+    }
+
+    # Admin panel
+    location /admin {
+        alias /var/www/html;
+        try_files /admin.html =404;
+        
+        # Additional security for admin
+        add_header X-Frame-Options DENY always;
+        add_header X-Robots-Tag "noindex, nofollow" always;
+    }
+
+    # API endpoints with rate limiting
+    location /api/portal/ {
+        limit_req zone=portal burst=10 nodelay;
+        
+        proxy_pass http://app:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+        
+        # Timeout settings
+        proxy_connect_timeout 5s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 60s;
+    }
+
+    location /api/admin/ {
+        limit_req zone=api burst=20 nodelay;
+        
+        proxy_pass http://app:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+        
+        # Timeout settings
+        proxy_connect_timeout 5s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 60s;
+    }
+
+    # M-Pesa callback endpoint (no rate limiting)
+    location /api/portal/mpesa/callback {
+        proxy_pass http://app:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # Longer timeout for M-Pesa callbacks
+        proxy_connect_timeout 10s;
+        proxy_send_timeout 120s;
+        proxy_read_timeout 120s;
+    }
+
+    # Health check endpoint
+    location /health {
+        proxy_pass http://app:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        access_log off;
+    }
+
+    # Default captive portal redirect
+    location / {
+        return 302 https://$host/portal;
+    }
+
+    # Security: Block access to sensitive files
+    location ~ /\. {
+        deny all;
+        access_log off;
+        log_not_found off;
+    }
+
+    location ~ \.(env|log|sql)$ {
+        deny all;
+        access_log off;
+        log_not_found off;
+    }
+
+    # Error pages
+    error_page 404 /portal;
+    error_page 500 502 503 504 /50x.html;
+    
+    location = /50x.html {
+        root /usr/share/nginx/html;
+    }
+}
