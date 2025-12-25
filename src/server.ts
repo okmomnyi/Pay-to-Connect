@@ -11,6 +11,7 @@ import { logger } from './utils/logger';
 
 import portalRoutes from './routes/portal';
 import adminRoutes from './routes/admin';
+import enhancedAdminRoutes from './routes/enhancedAdmin';
 
 // Load environment variables
 dotenv.config();
@@ -95,6 +96,7 @@ class Server {
         // API routes
         this.app.use('/api/portal', portalRoutes);
         this.app.use('/api/admin', adminRoutes);
+        this.app.use('/api/enhanced-admin', enhancedAdminRoutes);
 
         // Health check endpoint
         this.app.get('/health', async (req, res) => {
