@@ -7,7 +7,8 @@ dotenv.config();
 class DatabaseConnection {
     private static instance: DatabaseConnection;
     private pool: Pool;
-    private redisClient: RedisClientType;
+    private redisClient: RedisClientType | null = null;
+    private redisEnabled: boolean = false;
 
     private constructor() {
         this.pool = new Pool({
@@ -21,16 +22,34 @@ class DatabaseConnection {
             connectionTimeoutMillis: 2000,
         });
 
-        this.redisClient = createClient({
-            url: process.env.REDIS_URL || `redis://${process.env.REDIS_HOST}:${process.env.REDIS_PORT}`,
-            password: process.env.REDIS_PASSWORD || undefined,
-        });
+        // Make Redis optional - only initialize if explicitly enabled
+        if (process.env.REDIS_ENABLED === 'true') {
+            try {
+                this.redisClient = createClient({
+                    url: process.env.REDIS_URL || `redis://${process.env.REDIS_HOST}:${process.env.REDIS_PORT}`,
+                    password: process.env.REDIS_PASSWORD || undefined,
+                });
 
-        this.redisClient.on('error', (err) => {
-            console.error('Redis Client Error:', err);
-        });
+                this.redisClient.on('error', (err) => {
+                    console.warn('Redis Client Error (Redis is optional):', err);
+                });
 
-        this.redisClient.connect().catch(console.error);
+                this.redisClient.connect()
+                    .then(() => {
+                        this.redisEnabled = true;
+                        console.log('Redis connected successfully');
+                    })
+                    .catch((err) => {
+                        console.warn('Redis connection failed, continuing without Redis:', err);
+                        this.redisClient = null;
+                    });
+            } catch (error) {
+                console.warn('Failed to initialize Redis, continuing without it:', error);
+                this.redisClient = null;
+            }
+        } else {
+            console.log('Redis is disabled, using PostgreSQL only');
+        }
     }
 
     public static getInstance(): DatabaseConnection {
@@ -44,8 +63,12 @@ class DatabaseConnection {
         return this.pool;
     }
 
-    public getRedisClient(): RedisClientType {
+    public getRedisClient(): RedisClientType | null {
         return this.redisClient;
+    }
+
+    public isRedisEnabled(): boolean {
+        return this.redisEnabled && this.redisClient !== null;
     }
 
     public async getClient(): Promise<PoolClient> {
@@ -73,7 +96,9 @@ class DatabaseConnection {
 
     public async close(): Promise<void> {
         await this.pool.end();
-        await this.redisClient.quit();
+        if (this.redisClient && this.redisEnabled) {
+            await this.redisClient.quit();
+        }
     }
 }
 

@@ -146,19 +146,27 @@ class PortalController {
             );
 
             if (paymentResult.success && paymentResult.checkoutRequestId) {
-                // Store session reference for later activation
-                const redisClient = this.db.getRedisClient();
-                await redisClient.setEx(
-                    `payment:${paymentResult.checkoutRequestId}`,
-                    600, // 10 minutes
-                    JSON.stringify({
-                        packageId,
-                        macAddress,
-                        phone,
-                        amount,
-                        accountReference
-                    })
-                );
+                // Store session reference for later activation (if Redis is available)
+                if (this.db.isRedisEnabled()) {
+                    const redisClient = this.db.getRedisClient();
+                    await redisClient!.setEx(
+                        `payment:${paymentResult.checkoutRequestId}`,
+                        600, // 10 minutes
+                        JSON.stringify({
+                            packageId,
+                            macAddress,
+                            phone,
+                            amount,
+                            accountReference
+                        })
+                    );
+                } else {
+                    // Store in database as fallback
+                    await this.db.query(
+                        `UPDATE payments SET raw_callback = $1 WHERE mpesa_checkout_request_id = $2`,
+                        [JSON.stringify({ packageId, macAddress, phone, amount, accountReference }), paymentResult.checkoutRequestId]
+                    );
+                }
 
                 res.json({
                     success: true,
@@ -318,11 +326,26 @@ class PortalController {
                 const callback = req.body.Body.stkCallback;
                 const checkoutRequestId = callback.CheckoutRequestID;
 
-                const redisClient = this.db.getRedisClient();
-                const sessionDataStr = await redisClient.get(`payment:${checkoutRequestId}`);
+                let sessionData = null;
 
-                if (sessionDataStr && callback.ResultCode === 0) {
-                    const sessionData = JSON.parse(sessionDataStr);
+                if (this.db.isRedisEnabled()) {
+                    const redisClient = this.db.getRedisClient();
+                    const sessionDataStr = await redisClient!.get(`payment:${checkoutRequestId}`);
+                    if (sessionDataStr) {
+                        sessionData = JSON.parse(sessionDataStr);
+                    }
+                } else {
+                    // Fallback to database
+                    const paymentResult = await this.db.query(
+                        `SELECT raw_callback FROM payments WHERE mpesa_checkout_request_id = $1`,
+                        [checkoutRequestId]
+                    );
+                    if (paymentResult.rows.length > 0 && paymentResult.rows[0].raw_callback) {
+                        sessionData = paymentResult.rows[0].raw_callback;
+                    }
+                }
+
+                if (sessionData && callback.ResultCode === 0) {
                     
                     // Get router IP from request or use default
                     const routerIp = req.ip || '127.0.0.1';
@@ -338,18 +361,24 @@ class PortalController {
                     if (sessionResult.success) {
                         logger.info(`Session created successfully: ${sessionResult.sessionId}`);
                         
-                        // Store session ID in Redis for quick access
-                        await redisClient.setEx(
-                            `session:${sessionData.macAddress}`,
-                            3600, // 1 hour
-                            sessionResult.sessionId!
-                        );
+                        // Store session ID in Redis for quick access (if available)
+                        if (this.db.isRedisEnabled()) {
+                            const redisClient = this.db.getRedisClient();
+                            await redisClient!.setEx(
+                                `session:${sessionData.macAddress}`,
+                                3600, // 1 hour
+                                sessionResult.sessionId!
+                            );
+                        }
                     } else {
                         logger.error(`Failed to create session: ${sessionResult.error}`);
                     }
 
                     // Clean up payment data
-                    await redisClient.del(`payment:${checkoutRequestId}`);
+                    if (this.db.isRedisEnabled()) {
+                        const redisClient = this.db.getRedisClient();
+                        await redisClient!.del(`payment:${checkoutRequestId}`);
+                    }
                 }
             }
 

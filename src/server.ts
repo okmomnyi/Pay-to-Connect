@@ -102,9 +102,17 @@ class Server {
                 // Check database connection
                 await this.db.query('SELECT 1');
                 
-                // Check Redis connection
-                const redisClient = this.db.getRedisClient();
-                await redisClient.ping();
+                // Check Redis connection (optional)
+                let redisStatus = 'disabled';
+                if (this.db.isRedisEnabled()) {
+                    try {
+                        const redisClient = this.db.getRedisClient();
+                        await redisClient!.ping();
+                        redisStatus = 'connected';
+                    } catch (redisError) {
+                        redisStatus = 'disconnected';
+                    }
+                }
 
                 res.json({
                     success: true,
@@ -112,7 +120,7 @@ class Server {
                     timestamp: new Date().toISOString(),
                     services: {
                         database: 'connected',
-                        redis: 'connected',
+                        redis: redisStatus,
                         radius: 'running'
                     }
                 });
