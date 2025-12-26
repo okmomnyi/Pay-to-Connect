@@ -4,11 +4,9 @@ import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
 
-import portalRoutes from '../src/routes/portal';
+import portalRoutes from '../src/routes/mockPortal';
 import adminRoutes from '../src/routes/admin';
-import enhancedAdminRoutes from '../src/routes/enhancedAdmin';
 import userRoutes from '../src/routes/user';
-import DatabaseConnection from '../src/database/connection';
 
 // Load environment variables
 dotenv.config();
@@ -39,27 +37,14 @@ app.use('/api/user', userRoutes);
 // Health check endpoint
 app.get('/api/health', async (req, res) => {
   try {
-    const db = DatabaseConnection.getInstance();
-    await db.query('SELECT 1');
-    
-    let redisStatus = 'disabled';
-    if (db.isRedisEnabled()) {
-      try {
-        const redisClient = db.getRedisClient();
-        await redisClient!.ping();
-        redisStatus = 'connected';
-      } catch (redisError) {
-        redisStatus = 'disconnected';
-      }
-    }
-
     res.json({
       success: true,
       status: 'healthy',
       timestamp: new Date().toISOString(),
       services: {
-        database: 'connected',
-        redis: redisStatus
+        database: 'mock',
+        redis: 'disabled',
+        environment: 'serverless'
       }
     });
   } catch (error) {
