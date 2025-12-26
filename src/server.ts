@@ -11,7 +11,7 @@ import { logger } from './utils/logger';
 
 import portalRoutes from './routes/portal';
 import adminRoutes from './routes/admin';
-import enhancedAdminRoutes from './routes/enhancedAdmin';
+import userRoutes from './routes/user';
 
 // Load environment variables
 dotenv.config();
@@ -96,7 +96,7 @@ class Server {
         // API routes
         this.app.use('/api/portal', portalRoutes);
         this.app.use('/api/admin', adminRoutes);
-        this.app.use('/api/enhanced-admin', enhancedAdminRoutes);
+        this.app.use('/api/user', userRoutes);
 
         // Health check endpoint
         this.app.get('/health', async (req, res) => {
@@ -137,9 +137,19 @@ class Server {
             }
         });
 
+        // Login page route
+        this.app.get('/login', (req, res) => {
+            res.sendFile(join(__dirname, '../public/login.html'));
+        });
+
+        // Portal page route
+        this.app.get('/portal', (req, res) => {
+            res.sendFile(join(__dirname, '../public/index.html'));
+        });
+
         // Captive portal redirect handler
         this.app.get('/', (req, res) => {
-            res.redirect('/portal');
+            res.redirect('/login');
         });
 
         // Serve captive portal for any unmatched routes
