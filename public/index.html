@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wi-Fi Access Portal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .glass-effect {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .pulse-animation {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .5; }
+        }
+        .loading-spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3498db;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="gradient-bg min-h-screen flex items-center justify-center p-4">
+    <div class="w-full max-w-md">
+        <!-- Main Portal Card -->
+        <div id="portalCard" class="glass-effect rounded-2xl p-6 shadow-2xl">
+            <!-- Header -->
+            <div class="text-center mb-6">
+                <div class="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-4">
+                    <i class="fas fa-wifi text-2xl text-blue-600"></i>
+                </div>
+                <h1 class="text-2xl font-bold text-white mb-2">Wi-Fi Access</h1>
+                <p class="text-blue-100">Choose a package to get connected</p>
+                
+                <!-- User Info -->
+                <div id="userInfo" class="hidden mt-4 bg-white bg-opacity-10 rounded-lg p-3">
+                    <p class="text-sm text-blue-100">Welcome, <span id="userName" class="text-white font-medium"></span></p>
+                    <button id="logoutBtn" class="text-xs text-blue-200 hover:text-white underline mt-1">Logout</button>
+                </div>
+                
+                <!-- Login Required Message -->
+                <div id="loginRequired" class="mt-4 bg-yellow-500 bg-opacity-20 border border-yellow-400 rounded-lg p-3">
+                    <p class="text-sm text-yellow-100 mb-2">Please login to purchase internet packages</p>
+                    <a href="/login" class="inline-block bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-2 px-4 rounded-lg transition duration-200">
+                        <i class="fas fa-sign-in-alt mr-1"></i>Login / Register
+                    </a>
+                </div>
+            </div>
+
+            <!-- Loading State -->
+            <div id="loadingState" class="text-center py-8">
+                <div class="loading-spinner mx-auto mb-4"></div>
+                <p class="text-white">Loading packages...</p>
+            </div>
+
+            <!-- Error State -->
+            <div id="errorState" class="hidden bg-red-500 bg-opacity-20 border border-red-400 rounded-lg p-4 mb-4">
+                <div class="flex items-center">
+                    <i class="fas fa-exclamation-triangle text-red-300 mr-3"></i>
+                    <span id="errorMessage" class="text-red-100"></span>
+                </div>
+            </div>
+
+            <!-- Packages List -->
+            <div id="packagesList" class="hidden space-y-3 mb-6">
+                <!-- Packages will be dynamically loaded here -->
+            </div>
+
+            <!-- Payment Form -->
+            <div id="paymentForm" class="hidden">
+                <div class="mb-4">
+                    <label class="block text-white text-sm font-medium mb-2">
+                        <i class="fas fa-phone mr-2"></i>Phone Number
+                    </label>
+                    <input 
+                        type="tel" 
+                        id="phoneInput" 
+                        placeholder="0712345678 or +254712345678"
+                        class="w-full px-4 py-3 rounded-lg bg-white bg-opacity-20 border border-white border-opacity-30 text-white placeholder-blue-200 focus:outline-none focus:ring-2 focus:ring-white focus:ring-opacity-50"
+                    >
+                </div>
+
+                <div class="mb-6">
+                    <div class="bg-white bg-opacity-10 rounded-lg p-4">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-blue-100">Package:</span>
+                            <span id="selectedPackageName" class="text-white font-medium"></span>
+                        </div>
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-blue-100">Duration:</span>
+                            <span id="selectedPackageDuration" class="text-white font-medium"></span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-blue-100">Amount:</span>
+                            <span id="selectedPackagePrice" class="text-white font-bold text-lg"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <button 
+                    id="payButton" 
+                    class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-4 rounded-lg transition duration-200 flex items-center justify-center"
+                >
+                    <i class="fas fa-mobile-alt mr-2"></i>
+                    Pay with M-Pesa
+                </button>
+
+                <button 
+                    id="backButton" 
+                    class="w-full mt-3 bg-white bg-opacity-20 hover:bg-opacity-30 text-white font-medium py-2 px-4 rounded-lg transition duration-200"
+                >
+                    <i class="fas fa-arrow-left mr-2"></i>
+                    Back to Packages
+                </button>
+            </div>
+
+            <!-- Payment Status -->
+            <div id="paymentStatus" class="hidden text-center">
+                <div id="paymentPending" class="hidden">
+                    <div class="w-16 h-16 bg-yellow-500 rounded-full flex items-center justify-center mx-auto mb-4 pulse-animation">
+                        <i class="fas fa-clock text-2xl text-white"></i>
+                    </div>
+                    <h3 class="text-xl font-bold text-white mb-2">Payment Pending</h3>
+                    <p class="text-blue-100 mb-4">Check your phone for M-Pesa prompt</p>
+                    <div class="bg-white bg-opacity-10 rounded-lg p-4 mb-4">
+                        <p class="text-sm text-blue-100">Amount: <span id="pendingAmount" class="text-white font-medium"></span></p>
+                        <p class="text-sm text-blue-100">Package: <span id="pendingPackage" class="text-white font-medium"></span></p>
+                    </div>
+                    <button id="checkStatusButton" class="bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-lg transition duration-200">
+                        <i class="fas fa-sync-alt mr-2"></i>Check Status
+                    </button>
+                </div>
+
+                <div id="paymentSuccess" class="hidden">
+                    <div class="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <i class="fas fa-check text-2xl text-white"></i>
+                    </div>
+                    <h3 class="text-xl font-bold text-white mb-2">Payment Successful!</h3>
+                    <p class="text-blue-100 mb-4">You are now connected to the internet</p>
+                    <div class="bg-white bg-opacity-10 rounded-lg p-4 mb-4">
+                        <p class="text-sm text-blue-100">Session expires: <span id="sessionExpiry" class="text-white font-medium"></span></p>
+                        <p class="text-sm text-blue-100">Time remaining: <span id="timeRemaining" class="text-white font-medium"></span></p>
+                    </div>
+                    <button id="newSessionButton" class="bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-lg transition duration-200">
+                        <i class="fas fa-plus mr-2"></i>Buy More Time
+                    </button>
+                </div>
+
+                <div id="paymentFailed" class="hidden">
+                    <div class="w-16 h-16 bg-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <i class="fas fa-times text-2xl text-white"></i>
+                    </div>
+                    <h3 class="text-xl font-bold text-white mb-2">Payment Failed</h3>
+                    <p class="text-blue-100 mb-4">Please try again or contact support</p>
+                    <button id="retryPaymentButton" class="bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 rounded-lg transition duration-200">
+                        <i class="fas fa-redo mr-2"></i>Try Again
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Terms & Conditions -->
+        <div class="mt-4 text-center">
+            <button id="termsButton" class="text-blue-200 hover:text-white text-sm underline">
+                Terms & Conditions
+            </button>
+        </div>
+    </div>
+
+    <!-- Terms Modal -->
+    <div id="termsModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-lg max-w-md w-full max-h-96 overflow-y-auto">
+            <div class="p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-bold text-gray-900">Terms & Conditions</h3>
+                    <button id="closeTermsButton" class="text-gray-400 hover:text-gray-600">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="text-sm text-gray-600 space-y-3">
+                    <p><strong>1. Service Usage:</strong> This Wi-Fi service is provided for legitimate internet access only. Any illegal activities are strictly prohibited.</p>
+                    <p><strong>2. Payment:</strong> All payments are processed through M-Pesa. Refunds are not available once internet access is granted.</p>
+                    <p><strong>3. Session Duration:</strong> Your internet session will automatically expire at the end of the purchased time period.</p>
+                    <p><strong>4. Fair Usage:</strong> We reserve the right to limit bandwidth for excessive usage that affects other users.</p>
+                    <p><strong>5. Privacy:</strong> We do not monitor your browsing activities. However, we may log connection times and data usage for billing purposes.</p>
+                    <p><strong>6. Support:</strong> For technical issues, please contact our support team.</p>
+                    <p><strong>7. Liability:</strong> We are not responsible for any damages or losses incurred while using this service.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

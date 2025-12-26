@@ -86,7 +86,7 @@ dist
 
 # Gatsby Files
 .cache/
-public
+# public - commented out because we need this directory for our app
 
 # Storybook Build Outputs
 .out
@@ -191,7 +191,7 @@ dist
 
 # Gatsby Files
 .cache/
-public
+# public - commented out because we need this directory for our app
 
 # Vuepress Build Output
 .vuepress/dist
@@ -274,3 +274,5 @@ fixtures/sensitive/
 # Deployment Scripts with Credentials
 deploy.sh
 deploy.bat
+.vercel
+.env*.local

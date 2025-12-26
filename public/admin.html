@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pay-to-Connect Admin Panel</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .sidebar-transition { transition: transform 0.3s ease-in-out; }
+        .table-row:hover { background-color: rgba(59, 130, 246, 0.05); }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <!-- Login Modal -->
+    <div id="loginModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg p-8 max-w-md w-full mx-4">
+            <div class="text-center mb-6">
+                <div class="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <i class="fas fa-shield-alt text-2xl text-white"></i>
+                </div>
+                <h2 class="text-2xl font-bold text-gray-900">Admin Login</h2>
+                <p class="text-gray-600">Enter your credentials to access the admin panel</p>
+            </div>
+            
+            <form id="loginForm">
+                <div class="mb-4">
+                    <label class="block text-gray-700 text-sm font-bold mb-2">Username</label>
+                    <input type="text" id="username" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                </div>
+                
+                <div class="mb-6">
+                    <label class="block text-gray-700 text-sm font-bold mb-2">Password</label>
+                    <input type="password" id="password" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                </div>
+                
+                <div id="loginError" class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4"></div>
+                
+                <button type="submit" id="loginButton" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition duration-200">
+                    <i class="fas fa-sign-in-alt mr-2"></i>Login
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Main App -->
+    <div id="adminApp" class="hidden">
+        <!-- Header -->
+        <header class="bg-white shadow-sm border-b border-gray-200">
+            <div class="flex justify-between items-center px-6 py-4">
+                <div class="flex items-center">
+                    <button id="sidebarToggle" class="lg:hidden mr-4 text-gray-600 hover:text-gray-900">
+                        <i class="fas fa-bars text-xl"></i>
+                    </button>
+                    <h1 class="text-2xl font-bold text-gray-900">Pay-to-Connect Admin</h1>
+                </div>
+                
+                <div class="flex items-center space-x-4">
+                    <span id="adminUsername" class="text-gray-700"></span>
+                    <button id="logoutButton" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition duration-200">
+                        <i class="fas fa-sign-out-alt mr-2"></i>Logout
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <div class="flex">
+            <!-- Sidebar -->
+            <nav id="sidebar" class="bg-gray-800 text-white w-64 min-h-screen sidebar-transition transform -translate-x-full lg:translate-x-0 fixed lg:relative z-40">
+                <div class="p-6">
+                    <div class="space-y-2">
+                        <a href="#" data-section="dashboard" class="nav-link flex items-center px-4 py-2 rounded-lg hover:bg-gray-700 transition duration-200">
+                            <i class="fas fa-chart-line mr-3"></i>Dashboard
+                        </a>
+                        <a href="#" data-section="packages" class="nav-link flex items-center px-4 py-2 rounded-lg hover:bg-gray-700 transition duration-200">
+                            <i class="fas fa-box mr-3"></i>Packages
+                        </a>
+                        <a href="#" data-section="routers" class="nav-link flex items-center px-4 py-2 rounded-lg hover:bg-gray-700 transition duration-200">
+                            <i class="fas fa-wifi mr-3"></i>Routers
+                        </a>
+                        <a href="#" data-section="sessions" class="nav-link flex items-center px-4 py-2 rounded-lg hover:bg-gray-700 transition duration-200">
+                            <i class="fas fa-users mr-3"></i>Sessions
+                        </a>
+                        <a href="#" data-section="payments" class="nav-link flex items-center px-4 py-2 rounded-lg hover:bg-gray-700 transition duration-200">
+                            <i class="fas fa-credit-card mr-3"></i>Payments
+                        </a>
+                    </div>
+                </div>
+            </nav>
+
+            <!-- Main Content -->
+            <main class="flex-1 p-6">
+                <!-- Dashboard Section -->
+                <div id="dashboardSection" class="section">
+                    <div class="mb-6">
+                        <h2 class="text-3xl font-bold text-gray-900">Dashboard</h2>
+                        <p class="text-gray-600">Overview of system statistics</p>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                        <div class="bg-white rounded-lg shadow p-6">
+                            <div class="flex items-center">
+                                <div class="p-3 rounded-full bg-blue-100 text-blue-600">
+                                    <i class="fas fa-users text-xl"></i>
+                                </div>
+                                <div class="ml-4">
+                                    <p class="text-sm font-medium text-gray-600">Active Sessions</p>
+                                    <p id="activeSessions" class="text-2xl font-bold text-gray-900">-</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-white rounded-lg shadow p-6">
+                            <div class="flex items-center">
+                                <div class="p-3 rounded-full bg-green-100 text-green-600">
+                                    <i class="fas fa-money-bill text-xl"></i>
+                                </div>
+                                <div class="ml-4">
+                                    <p class="text-sm font-medium text-gray-600">Today's Revenue</p>
+                                    <p id="todayRevenue" class="text-2xl font-bold text-gray-900">-</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-white rounded-lg shadow p-6">
+                            <div class="flex items-center">
+                                <div class="p-3 rounded-full bg-yellow-100 text-yellow-600">
+                                    <i class="fas fa-mobile-alt text-xl"></i>
+                                </div>
+                                <div class="ml-4">
+                                    <p class="text-sm font-medium text-gray-600">Total Devices</p>
+                                    <p id="totalDevices" class="text-2xl font-bold text-gray-900">-</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-white rounded-lg shadow p-6">
+                            <div class="flex items-center">
+                                <div class="p-3 rounded-full bg-purple-100 text-purple-600">
+                                    <i class="fas fa-chart-line text-xl"></i>
+                                </div>
+                                <div class="ml-4">
+                                    <p class="text-sm font-medium text-gray-600">Total Revenue</p>
+                                    <p id="totalRevenue" class="text-2xl font-bold text-gray-900">-</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-lg shadow">
+                        <div class="px-6 py-4 border-b border-gray-200">
+                            <h3 class="text-lg font-semibold text-gray-900">Recent Sessions</h3>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-200">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Device</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Package</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="recentSessionsTable" class="bg-white divide-y divide-gray-200">
+                                    <!-- Recent sessions will be loaded here -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Packages Section -->
+                <div id="packagesSection" class="section hidden">
+                    <div class="mb-6 flex justify-between items-center">
+                        <div>
+                            <h2 class="text-3xl font-bold text-gray-900">Packages</h2>
+                            <p class="text-gray-600">Manage Wi-Fi access packages</p>
+                        </div>
+                        <button id="addPackageButton" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition duration-200">
+                            <i class="fas fa-plus mr-2"></i>Add Package
+                        </button>
+                    </div>
+
+                    <div class="bg-white rounded-lg shadow overflow-hidden">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Duration</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Price (KES)</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="packagesTable" class="bg-white divide-y divide-gray-200">
+                                <!-- Packages will be loaded here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Other sections (routers, sessions, payments) would be similar -->
+                <div id="routersSection" class="section hidden">
+                    <h2 class="text-3xl font-bold text-gray-900 mb-6">Routers</h2>
+                    <p class="text-gray-600">Router management coming soon...</p>
+                </div>
+
+                <div id="sessionsSection" class="section hidden">
+                    <h2 class="text-3xl font-bold text-gray-900 mb-6">Sessions</h2>
+                    <p class="text-gray-600">Session monitoring coming soon...</p>
+                </div>
+
+                <div id="paymentsSection" class="section hidden">
+                    <h2 class="text-3xl font-bold text-gray-900 mb-6">Payments</h2>
+                    <p class="text-gray-600">Payment history coming soon...</p>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Package Modal -->
+    <div id="packageModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <div class="flex justify-between items-center mb-4">
+                <h3 id="packageModalTitle" class="text-lg font-bold text-gray-900">Add Package</h3>
+                <button id="closePackageModal" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <form id="packageForm">
+                <div class="mb-4">
+                    <label class="block text-gray-700 text-sm font-bold mb-2">Package Name</label>
+                    <input type="text" id="packageName" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                </div>
+                
+                <div class="mb-4">
+                    <label class="block text-gray-700 text-sm font-bold mb-2">Duration (minutes)</label>
+                    <input type="number" id="packageDuration" min="1" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                </div>
+                
+                <div class="mb-6">
+                    <label class="block text-gray-700 text-sm font-bold mb-2">Price (KES)</label>
+                    <input type="number" id="packagePrice" min="0" step="0.01" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                </div>
+                
+                <div class="flex space-x-3">
+                    <button type="button" id="cancelPackage" class="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 font-bold py-2 px-4 rounded-lg transition duration-200">
+                        Cancel
+                    </button>
+                    <button type="submit" id="savePackage" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition duration-200">
+                        Save
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="admin.js"></script>
+</body>
+</html>
