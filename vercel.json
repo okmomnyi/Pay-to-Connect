@@ -12,15 +12,27 @@
   ],
   "routes": [
     {
-      "src": "/portal/(.*)",
-      "dest": "/public/$1"
+      "src": "/login",
+      "dest": "/public/login.html"
+    },
+    {
+      "src": "/portal",
+      "dest": "/public/index.html"
+    },
+    {
+      "src": "/admin",
+      "dest": "/public/admin.html"
     },
     {
       "src": "/api/(.*)",
       "dest": "/api/index.ts"
     },
     {
-      "src": "/(.*)",
+      "src": "/public/(.*)",
+      "dest": "/public/$1"
+    },
+    {
+      "src": "/",
       "dest": "/public/index.html"
     }
   ],
