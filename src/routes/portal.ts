@@ -31,6 +31,7 @@ const statusLimiter = rateLimit({
 // Public portal endpoints
 router.get('/packages', portalController.getPackages);
 router.post('/pay', paymentLimiter, portalController.initiatePayment);
+router.post('/payment', paymentLimiter, portalController.initiatePayment); // Added for API compatibility
 router.get('/status/:checkoutRequestId', statusLimiter, portalController.getPaymentStatus);
 router.get('/device/:macAddress', statusLimiter, portalController.getDeviceStatus);
 

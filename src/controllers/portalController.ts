@@ -11,6 +11,7 @@ interface PackageResponse {
     name: string;
     duration_minutes: number;
     price_kes: number;
+    price: number; // Added for API compatibility
     duration_display: string;
 }
 
@@ -62,6 +63,7 @@ class PortalController {
                 name: pkg.name,
                 duration_minutes: pkg.duration_minutes,
                 price_kes: parseFloat(pkg.price_kes),
+                price: parseFloat(pkg.price_kes), // Added for API compatibility
                 duration_display: this.formatDuration(pkg.duration_minutes)
             }));
 
@@ -79,6 +81,7 @@ class PortalController {
                     name: '1 Hour Basic',
                     duration_minutes: 60,
                     price_kes: 10,
+                    price: 10,
                     duration_display: '1 hour'
                 },
                 {
@@ -86,6 +89,7 @@ class PortalController {
                     name: '3 Hours Standard',
                     duration_minutes: 180,
                     price_kes: 25,
+                    price: 25,
                     duration_display: '3 hours'
                 },
                 {
@@ -93,6 +97,7 @@ class PortalController {
                     name: '24 Hours Premium',
                     duration_minutes: 1440,
                     price_kes: 50,
+                    price: 50,
                     duration_display: '1 day'
                 },
                 {
@@ -100,6 +105,7 @@ class PortalController {
                     name: '7 Days Unlimited',
                     duration_minutes: 10080,
                     price_kes: 200,
+                    price: 200,
                     duration_display: '7 days'
                 }
             ];

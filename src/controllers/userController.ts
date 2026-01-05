@@ -6,12 +6,9 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 
 interface User {
-    id: string;
+    userId: string;
     username: string;
     email: string;
-    phone: string;
-    first_name: string;
-    last_name: string;
 }
 
 interface AuthRequest extends Request {
@@ -27,10 +24,20 @@ class UserController {
 
     public register = async (req: Request, res: Response): Promise<void> => {
         try {
+            // Validate JWT_SECRET exists
+            if (!process.env.JWT_SECRET) {
+                logger.error('JWT_SECRET not configured');
+                res.status(500).json({
+                    success: false,
+                    error: 'Server configuration error'
+                });
+                return;
+            }
+
             const schema = Joi.object({
                 username: Joi.string().alphanum().min(3).max(30).required(),
                 email: Joi.string().email().required(),
-                phone: Joi.string().pattern(/^(\+254|0)[17]\d{8}$/).required(),
+                phone: Joi.string().pattern(/^(\+254|0)[17]\d{7,9}$/).required(),
                 password: Joi.string().min(6).required(),
                 firstName: Joi.string().min(2).max(50).required(),
                 lastName: Joi.string().min(2).max(50).required()
@@ -81,7 +88,7 @@ class UserController {
                     username: user.username,
                     email: user.email 
                 },
-                process.env.JWT_SECRET!,
+                process.env.JWT_SECRET,
                 { expiresIn: '7d' }
             );
 
@@ -109,6 +116,16 @@ class UserController {
 
     public login = async (req: Request, res: Response): Promise<void> => {
         try {
+            // Validate JWT_SECRET exists
+            if (!process.env.JWT_SECRET) {
+                logger.error('JWT_SECRET not configured');
+                res.status(500).json({
+                    success: false,
+                    error: 'Server configuration error'
+                });
+                return;
+            }
+
             const schema = Joi.object({
                 username: Joi.string().required(),
                 password: Joi.string().required()
@@ -156,7 +173,7 @@ class UserController {
                     username: user.username,
                     email: user.email 
                 },
-                process.env.JWT_SECRET!,
+                process.env.JWT_SECRET,
                 { expiresIn: '7d' }
             );
 
@@ -183,7 +200,15 @@ class UserController {
 
     public getProfile = async (req: AuthRequest, res: Response): Promise<void> => {
         try {
-            const userId = req.user?.id;
+            const userId = req.user?.userId;
+
+            if (!userId) {
+                res.status(401).json({
+                    success: false,
+                    error: 'User not authenticated'
+                });
+                return;
+            }
 
             const result = await this.db.query(
                 `SELECT id, username, email, phone, first_name, last_name, created_at
@@ -201,16 +226,6 @@ class UserController {
 
             const user = result.rows[0];
 
-            // Get user's devices
-            const devicesResult = await this.db.query(
-                `SELECT ud.device_name, d.mac_address, ud.is_primary, ud.created_at
-                 FROM user_devices ud
-                 JOIN devices d ON ud.device_id = d.id
-                 WHERE ud.user_id = $1
-                 ORDER BY ud.is_primary DESC, ud.created_at DESC`,
-                [userId]
-            );
-
             res.json({
                 success: true,
                 user: {
@@ -220,8 +235,7 @@ class UserController {
                     phone: user.phone,
                     firstName: user.first_name,
                     lastName: user.last_name,
-                    createdAt: user.created_at,
-                    devices: devicesResult.rows
+                    createdAt: user.created_at
                 }
             });
         } catch (error) {
@@ -251,7 +265,7 @@ class UserController {
             }
 
             const { macAddress, deviceName, isPrimary } = value;
-            const userId = req.user?.id;
+            const userId = req.user?.userId;
 
             // Check if device already exists
             let deviceResult = await this.db.query(

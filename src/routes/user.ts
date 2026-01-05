@@ -1,9 +1,9 @@
 import { Router } from 'express';
-import MockUserController from '../controllers/mockUserController';
+import UserController from '../controllers/userController';
 import { authenticateUser } from '../middleware/userAuth';
 
 const router = Router();
-const userController = new MockUserController();
+const userController = new UserController();
 
 // Public user endpoints
 router.post('/register', userController.register);

@@ -24,6 +24,16 @@ class AdminController {
 
     public login = async (req: Request, res: Response): Promise<void> => {
         try {
+            // Validate JWT_SECRET exists
+            if (!process.env.JWT_SECRET) {
+                logger.error('JWT_SECRET not configured');
+                res.status(500).json({
+                    success: false,
+                    error: 'Server configuration error'
+                });
+                return;
+            }
+
             const schema = Joi.object({
                 username: Joi.string().required(),
                 password: Joi.string().required()
@@ -70,7 +80,7 @@ class AdminController {
                     username: user.username,
                     email: user.email 
                 },
-                process.env.JWT_SECRET!,
+                process.env.JWT_SECRET,
                 { expiresIn: '24h' }
             );
 

@@ -11,15 +11,25 @@ const pool = new Pool({
     database: process.env.DB_NAME,
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
+    ssl: {
+        rejectUnauthorized: false
+    }
 });
 
 async function runMigrations() {
     try {
         console.log('Starting database migration...');
         
-        const schemaSQL = readFileSync(join(__dirname, 'schema.sql'), 'utf8');
+        // Read SQL files from src directory (not dist)
+        const srcDir = join(__dirname, '..', '..', 'src', 'database');
+        const schemaSQL = readFileSync(join(srcDir, 'schema.sql'), 'utf8');
+        const authSchemaSQL = readFileSync(join(srcDir, 'auth-schema.sql'), 'utf8');
         
+        console.log('Running main schema...');
         await pool.query(schemaSQL);
+        
+        console.log('Running auth schema...');
+        await pool.query(authSchemaSQL);
         
         console.log('Database migration completed successfully!');
         

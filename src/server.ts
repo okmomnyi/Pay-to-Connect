@@ -26,6 +26,7 @@ class Server {
         this.db = DatabaseConnection.getInstance();
         this.radiusService = new RadiusService();
         
+        this.validateEnvironment();
         this.setupMiddleware();
         this.setupRoutes();
         this.setupErrorHandling();
@@ -90,15 +91,7 @@ class Server {
     }
 
     private setupRoutes(): void {
-        // Serve static files for captive portal
-        this.app.use('/portal', express.static(join(__dirname, '../public')));
-
-        // API routes
-        this.app.use('/api/portal', portalRoutes);
-        this.app.use('/api/admin', adminRoutes);
-        this.app.use('/api/user', userRoutes);
-
-        // Health check endpoint
+        // Health check endpoint (before other routes)
         this.app.get('/health', async (req, res) => {
             try {
                 // Check database connection
@@ -137,6 +130,14 @@ class Server {
             }
         });
 
+        // API routes (must be before catch-all routes)
+        this.app.use('/api/portal', portalRoutes);
+        this.app.use('/api/admin', adminRoutes);
+        this.app.use('/api/user', userRoutes);
+
+        // Serve static files for captive portal
+        this.app.use('/portal', express.static(join(__dirname, '../public')));
+
         // Login page route
         this.app.get('/login', (req, res) => {
             res.sendFile(join(__dirname, '../public/login.html'));
@@ -152,18 +153,16 @@ class Server {
             res.redirect('/login');
         });
 
-        // Serve captive portal for any unmatched routes
-        this.app.get('*', (req, res) => {
-            // Check if it's an API request
-            if (req.path.startsWith('/api/')) {
-                res.status(404).json({
-                    success: false,
-                    error: 'API endpoint not found'
-                });
-                return;
-            }
+        // 404 handler for API routes (must be after API route definitions)
+        this.app.use('/api/*', (req, res) => {
+            res.status(404).json({
+                success: false,
+                error: 'API endpoint not found'
+            });
+        });
 
-            // Serve captive portal
+        // Serve captive portal for any other unmatched routes
+        this.app.get('*', (req, res) => {
             res.sendFile(join(__dirname, '../public/index.html'));
         });
     }
@@ -186,14 +185,32 @@ class Server {
                     : error.message
             });
         });
+    }
 
-        // Handle 404 for API routes
-        this.app.use('/api/*', (req, res) => {
-            res.status(404).json({
-                success: false,
-                error: 'API endpoint not found'
-            });
-        });
+    private validateEnvironment(): void {
+        const requiredEnvVars = [
+            'JWT_SECRET',
+            'DATABASE_URL',
+            'DB_HOST',
+            'DB_PORT',
+            'DB_NAME',
+            'DB_USER',
+            'DB_PASSWORD'
+        ];
+
+        const missing = requiredEnvVars.filter(varName => !process.env[varName]);
+
+        if (missing.length > 0) {
+            logger.error(`Missing required environment variables: ${missing.join(', ')}`);
+            throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
+        }
+
+        // Validate JWT_SECRET is not default
+        if (process.env.JWT_SECRET === 'your-super-secure-jwt-secret-key-here') {
+            logger.warn('WARNING: Using default JWT_SECRET. Please change this in production!');
+        }
+
+        logger.info('Environment validation passed');
     }
 
     private async startSessionCleanup(): Promise<void> {

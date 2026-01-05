@@ -1,10 +1,10 @@
 import { Router } from 'express';
 import { join } from 'path';
-import MockAdminController from '../controllers/mockAdminController';
+import AdminController from '../controllers/adminController';
 import { authenticateToken } from '../middleware/auth';
 
 const router = Router();
-const adminController = new MockAdminController();
+const adminController = new AdminController();
 
 // Serve admin login page
 router.get('/', (req, res) => {
