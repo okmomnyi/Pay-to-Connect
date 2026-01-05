@@ -135,8 +135,8 @@ class Server {
         this.app.use('/api/admin', adminRoutes);
         this.app.use('/api/user', userRoutes);
 
-        // Serve static files for captive portal
-        this.app.use('/portal', express.static(join(__dirname, '../public')));
+        // Serve static files (CSS, JS, images) from public directory
+        this.app.use(express.static(join(__dirname, '../public')));
 
         // Login page route
         this.app.get('/login', (req, res) => {
