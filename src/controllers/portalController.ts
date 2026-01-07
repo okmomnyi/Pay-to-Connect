@@ -137,13 +137,23 @@ class PortalController {
 
             const { phone, packageId, macAddress }: PaymentRequest = value;
 
+            // Validate MAC address format
+            const macRegex = /^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/;
+            if (!macRegex.test(macAddress)) {
+                res.status(400).json({
+                    success: false,
+                    error: 'Invalid MAC address format'
+                });
+                return;
+            }
+
             // Check if package exists and is active (with fallback to test packages)
             let packageData: any;
             let amount: number;
 
             try {
                 const packageResult = await this.db.query(
-                    'SELECT id, name, price_kes FROM packages WHERE id = $1 AND active = true',
+                    'SELECT id, name, price_kes, duration_minutes FROM packages WHERE id = $1 AND active = true',
                     [packageId]
                 );
 

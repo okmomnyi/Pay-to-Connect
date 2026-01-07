@@ -8,6 +8,7 @@ import dotenv from 'dotenv';
 import DatabaseConnection from './database/connection';
 import RadiusService from './services/radius';
 import { logger } from './utils/logger';
+import { sanitizeInput, validateNoSQLInjection } from './middleware/sanitize';
 
 import portalRoutes from './routes/portal';
 import adminRoutes from './routes/admin';
@@ -41,13 +42,23 @@ class Server {
                     styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.tailwindcss.com", "https://cdnjs.cloudflare.com"],
                     scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://cdn.tailwindcss.com"],
                     imgSrc: ["'self'", "data:", "https:"],
-                    connectSrc: ["'self'", "http://localhost:3000"],
+                    connectSrc: ["'self'", "http://localhost:3000", "https://localhost:3000"],
                     fontSrc: ["'self'", "https://cdnjs.cloudflare.com", "data:"],
                     objectSrc: ["'none'"],
                     mediaSrc: ["'self'"],
                     frameSrc: ["'none'"],
+                    baseUri: ["'self'"],
+                    formAction: ["'self'"],
                 },
             },
+            hsts: {
+                maxAge: 31536000,
+                includeSubDomains: true,
+                preload: true
+            },
+            noSniff: true,
+            referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+            xssFilter: true,
         }));
 
         // CORS configuration
@@ -75,6 +86,10 @@ class Server {
         // Body parsing middleware
         this.app.use(express.json({ limit: '10mb' }));
         this.app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+        // Input sanitization
+        this.app.use(sanitizeInput);
+        this.app.use(validateNoSQLInjection);
 
         // Trust proxy for accurate IP addresses
         this.app.set('trust proxy', 1);
@@ -148,9 +163,9 @@ class Server {
             res.sendFile(join(__dirname, '../public/index.html'));
         });
 
-        // Captive portal redirect handler
+        // Captive portal redirect handler - redirect to portal (not login)
         this.app.get('/', (req, res) => {
-            res.redirect('/login');
+            res.redirect('/portal');
         });
 
         // 404 handler for API routes (must be after API route definitions)
@@ -207,7 +222,15 @@ class Server {
 
         // Validate JWT_SECRET is not default
         if (process.env.JWT_SECRET === 'your-super-secure-jwt-secret-key-here') {
+            if (process.env.NODE_ENV === 'production') {
+                logger.error('CRITICAL: Default JWT_SECRET in production! Server will not start.');
+                throw new Error('Default JWT_SECRET not allowed in production');
+            }
             logger.warn('WARNING: Using default JWT_SECRET. Please change this in production!');
+        }
+        
+        if (process.env.JWT_SECRET && process.env.JWT_SECRET.length < 32) {
+            logger.warn('WARNING: JWT_SECRET is too short. Use at least 32 characters.');
         }
 
         logger.info('Environment validation passed');

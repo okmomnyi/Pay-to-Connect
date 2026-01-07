@@ -525,6 +525,233 @@ class AdminController {
             });
         }
     };
+
+    // Administrator Management Methods
+    public getAdministrators = async (req: AuthRequest, res: Response): Promise<void> => {
+        try {
+            const result = await this.db.query(`
+                SELECT 
+                    id,
+                    username,
+                    email,
+                    active,
+                    created_at,
+                    last_login
+                FROM admin_users
+                ORDER BY created_at DESC
+            `);
+
+            res.json({
+                success: true,
+                administrators: result.rows
+            });
+        } catch (error) {
+            logger.error('Failed to get administrators:', error);
+            res.status(500).json({
+                success: false,
+                error: 'Internal server error'
+            });
+        }
+    };
+
+    public createAdministrator = async (req: AuthRequest, res: Response): Promise<void> => {
+        try {
+            const schema = Joi.object({
+                username: Joi.string().alphanum().min(3).max(30).required(),
+                email: Joi.string().email().required(),
+                password: Joi.string().min(8).required()
+            });
+
+            const { error, value } = schema.validate(req.body);
+            if (error) {
+                res.status(400).json({
+                    success: false,
+                    error: error.details[0].message
+                });
+                return;
+            }
+
+            const { username, email, password } = value;
+
+            const existingAdmin = await this.db.query(
+                'SELECT id FROM admin_users WHERE username = $1 OR email = $2',
+                [username, email]
+            );
+
+            if (existingAdmin.rows.length > 0) {
+                res.status(409).json({
+                    success: false,
+                    error: 'Administrator with this username or email already exists'
+                });
+                return;
+            }
+
+            const passwordHash = await bcrypt.hash(password, 12);
+
+            const result = await this.db.query(
+                `INSERT INTO admin_users (username, email, password_hash, active)
+                 VALUES ($1, $2, $3, true)
+                 RETURNING id, username, email, active, created_at`,
+                [username, email, passwordHash]
+            );
+
+            const newAdmin = result.rows[0];
+
+            logger.info(`New administrator created: ${username} by ${req.user?.username}`);
+
+            res.status(201).json({
+                success: true,
+                message: 'Administrator created successfully',
+                administrator: {
+                    id: newAdmin.id,
+                    username: newAdmin.username,
+                    email: newAdmin.email,
+                    active: newAdmin.active,
+                    created_at: newAdmin.created_at
+                }
+            });
+        } catch (error) {
+            logger.error('Failed to create administrator:', error);
+            res.status(500).json({
+                success: false,
+                error: 'Internal server error'
+            });
+        }
+    };
+
+    public updateAdministrator = async (req: AuthRequest, res: Response): Promise<void> => {
+        try {
+            const { id } = req.params;
+
+            const schema = Joi.object({
+                email: Joi.string().email().optional(),
+                password: Joi.string().min(8).optional(),
+                active: Joi.boolean().optional()
+            });
+
+            const { error, value } = schema.validate(req.body);
+            if (error) {
+                res.status(400).json({
+                    success: false,
+                    error: error.details[0].message
+                });
+                return;
+            }
+
+            if (value.active === false && req.user?.id === id) {
+                res.status(400).json({
+                    success: false,
+                    error: 'Cannot deactivate your own account'
+                });
+                return;
+            }
+
+            const updates: string[] = [];
+            const params: any[] = [];
+            let paramIndex = 1;
+
+            if (value.email) {
+                updates.push(`email = $${paramIndex++}`);
+                params.push(value.email);
+            }
+
+            if (value.password) {
+                const passwordHash = await bcrypt.hash(value.password, 12);
+                updates.push(`password_hash = $${paramIndex++}`);
+                params.push(passwordHash);
+            }
+
+            if (value.active !== undefined) {
+                updates.push(`active = $${paramIndex++}`);
+                params.push(value.active);
+            }
+
+            if (updates.length === 0) {
+                res.status(400).json({
+                    success: false,
+                    error: 'No valid fields to update'
+                });
+                return;
+            }
+
+            params.push(id);
+
+            const result = await this.db.query(
+                `UPDATE admin_users 
+                 SET ${updates.join(', ')}
+                 WHERE id = $${paramIndex}
+                 RETURNING id, username, email, active`,
+                params
+            );
+
+            if (result.rows.length === 0) {
+                res.status(404).json({
+                    success: false,
+                    error: 'Administrator not found'
+                });
+                return;
+            }
+
+            logger.info(`Administrator updated: ${result.rows[0].username} by ${req.user?.username}`);
+
+            res.json({
+                success: true,
+                message: 'Administrator updated successfully',
+                administrator: result.rows[0]
+            });
+        } catch (error) {
+            logger.error('Failed to update administrator:', error);
+            res.status(500).json({
+                success: false,
+                error: 'Internal server error'
+            });
+        }
+    };
+
+    public deleteAdministrator = async (req: AuthRequest, res: Response): Promise<void> => {
+        try {
+            const { id } = req.params;
+
+            if (req.user?.id === id) {
+                res.status(400).json({
+                    success: false,
+                    error: 'Cannot delete your own account'
+                });
+                return;
+            }
+
+            const adminCheck = await this.db.query(
+                'SELECT username FROM admin_users WHERE id = $1',
+                [id]
+            );
+
+            if (adminCheck.rows.length === 0) {
+                res.status(404).json({
+                    success: false,
+                    error: 'Administrator not found'
+                });
+                return;
+            }
+
+            await this.db.query(
+                'UPDATE admin_users SET active = false WHERE id = $1',
+                [id]
+            );
+
+            logger.info(`Administrator deactivated: ${adminCheck.rows[0].username} by ${req.user?.username}`);
+
+            res.json({
+                success: true,
+                message: 'Administrator deactivated successfully'
+            });
+        } catch (error) {
+            logger.error('Failed to delete administrator:', error);
+            res.status(500).json({
+                success: false,
+                error: 'Internal server error'
+            });
+        }
+    };
 }
 
 export default AdminController;

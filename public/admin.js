@@ -48,6 +48,14 @@ class AdminPanel {
         this.packageModalTitle = document.getElementById('packageModalTitle');
         this.closePackageModal = document.getElementById('closePackageModal');
         this.cancelPackage = document.getElementById('cancelPackage');
+
+        // Administrator elements
+        this.addAdministratorButton = document.getElementById('addAdministratorButton');
+        this.administratorsTable = document.getElementById('administratorsTable');
+        this.administratorModal = document.getElementById('administratorModal');
+        this.administratorForm = document.getElementById('administratorForm');
+        this.closeAdministratorModal = document.getElementById('closeAdministratorModal');
+        this.cancelAdministrator = document.getElementById('cancelAdministrator');
     }
 
     bindEvents() {
@@ -79,6 +87,17 @@ class AdminPanel {
         this.packageModal.addEventListener('click', (e) => {
             if (e.target === this.packageModal) this.hidePackageModal();
         });
+
+        // Administrator management
+        this.addAdministratorButton.addEventListener('click', () => this.showAdministratorModal());
+        this.closeAdministratorModal.addEventListener('click', () => this.hideAdministratorModal());
+        this.cancelAdministrator.addEventListener('click', () => this.hideAdministratorModal());
+        this.administratorForm.addEventListener('submit', (e) => this.handleAdministratorSubmit(e));
+
+        // Close administrator modal on outside click
+        this.administratorModal.addEventListener('click', (e) => {
+            if (e.target === this.administratorModal) this.hideAdministratorModal();
+        });
     }
 
     showLoginModal() {
@@ -106,11 +125,14 @@ class AdminPanel {
         const username = document.getElementById('username').value;
         const password = document.getElementById('password').value;
 
+        console.log('Login attempt for username:', username);
+
         try {
             this.loginButton.disabled = true;
             this.loginButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Logging in...';
             this.hideLoginError();
 
+            console.log('Sending login request...');
             const response = await fetch('/api/admin/login', {
                 method: 'POST',
                 headers: {
@@ -119,21 +141,29 @@ class AdminPanel {
                 body: JSON.stringify({ username, password })
             });
 
+            console.log('Response status:', response.status);
             const data = await response.json();
+            console.log('Response data:', data);
 
             if (!data.success) {
+                console.error('Login failed:', data.error);
                 throw new Error(data.error || 'Login failed');
             }
 
             // Store token and user info
+            console.log('Storing token and user info...');
             localStorage.setItem('adminToken', data.token);
             localStorage.setItem('adminUser', JSON.stringify(data.user));
             
             this.token = data.token;
+            console.log('Showing admin panel...');
             this.showAdminPanel();
+            console.log('Loading dashboard...');
             this.loadDashboard();
+            console.log('Login complete!');
 
         } catch (error) {
+            console.error('Login error:', error);
             this.showLoginError(error.message);
         } finally {
             this.loginButton.disabled = false;
@@ -199,6 +229,9 @@ class AdminPanel {
                 break;
             case 'payments':
                 this.loadPayments();
+                break;
+            case 'administrators':
+                this.loadAdministrators();
                 break;
         }
 
@@ -497,6 +530,170 @@ class AdminPanel {
     loadPayments() {
         // Placeholder for payment history
         console.log('Loading payments...');
+    }
+
+    async loadAdministrators() {
+        try {
+            const response = await this.makeAuthenticatedRequest('/api/admin/administrators');
+            const data = await response.json();
+
+            if (!data.success) {
+                throw new Error(data.error || 'Failed to load administrators');
+            }
+
+            this.renderAdministrators(data.administrators);
+        } catch (error) {
+            console.error('Failed to load administrators:', error);
+            this.showError('Failed to load administrators');
+        }
+    }
+
+    renderAdministrators(administrators) {
+        const container = document.getElementById('administratorsTable');
+        if (!container) return;
+
+        container.innerHTML = '';
+
+        if (administrators.length === 0) {
+            container.innerHTML = '<tr><td colspan="5" class="px-6 py-4 text-center text-gray-500">No administrators found</td></tr>';
+            return;
+        }
+
+        administrators.forEach(admin => {
+            const row = document.createElement('tr');
+            row.className = 'table-row';
+
+            const statusClass = admin.active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
+            const statusText = admin.active ? 'Active' : 'Inactive';
+
+            row.innerHTML = `
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                    ${admin.username}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    ${admin.email}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${statusClass}">
+                        ${statusText}
+                    </span>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    ${new Date(admin.created_at).toLocaleDateString()}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <button onclick="adminPanel.editAdministrator('${admin.id}')" class="text-indigo-600 hover:text-indigo-900 mr-3">
+                        <i class="fas fa-edit"></i> Edit
+                    </button>
+                    <button onclick="adminPanel.deleteAdministrator('${admin.id}')" class="text-red-600 hover:text-red-900">
+                        <i class="fas fa-trash"></i> Delete
+                    </button>
+                </td>
+            `;
+
+            container.appendChild(row);
+        });
+    }
+
+    async createAdministrator(username, email, password) {
+        try {
+            const response = await this.makeAuthenticatedRequest('/api/admin/administrators', {
+                method: 'POST',
+                body: JSON.stringify({ username, email, password })
+            });
+
+            const data = await response.json();
+
+            if (!data.success) {
+                throw new Error(data.error || 'Failed to create administrator');
+            }
+
+            this.showSuccess('Administrator created successfully');
+            this.loadAdministrators();
+            return true;
+        } catch (error) {
+            console.error('Failed to create administrator:', error);
+            this.showError(error.message);
+            return false;
+        }
+    }
+
+    async editAdministrator(adminId) {
+        const newEmail = prompt('Enter new email (leave blank to skip):');
+        const newPassword = prompt('Enter new password (leave blank to skip):');
+
+        if (!newEmail && !newPassword) {
+            return;
+        }
+
+        try {
+            const updates = {};
+            if (newEmail) updates.email = newEmail;
+            if (newPassword) updates.password = newPassword;
+
+            const response = await this.makeAuthenticatedRequest(`/api/admin/administrators/${adminId}`, {
+                method: 'PUT',
+                body: JSON.stringify(updates)
+            });
+
+            const data = await response.json();
+
+            if (!data.success) {
+                throw new Error(data.error || 'Failed to update administrator');
+            }
+
+            this.showSuccess('Administrator updated successfully');
+            this.loadAdministrators();
+        } catch (error) {
+            console.error('Failed to update administrator:', error);
+            this.showError(error.message);
+        }
+    }
+
+    async deleteAdministrator(adminId) {
+        if (!confirm('Are you sure you want to deactivate this administrator?')) {
+            return;
+        }
+
+        try {
+            const response = await this.makeAuthenticatedRequest(`/api/admin/administrators/${adminId}`, {
+                method: 'DELETE'
+            });
+
+            const data = await response.json();
+
+            if (!data.success) {
+                throw new Error(data.error || 'Failed to delete administrator');
+            }
+
+            this.showSuccess('Administrator deactivated successfully');
+            this.loadAdministrators();
+        } catch (error) {
+            console.error('Failed to delete administrator:', error);
+            this.showError(error.message);
+        }
+    }
+
+    showAdministratorModal() {
+        this.administratorForm.reset();
+        this.administratorModal.classList.remove('hidden');
+    }
+
+    hideAdministratorModal() {
+        this.administratorModal.classList.add('hidden');
+    }
+
+    async handleAdministratorSubmit(e) {
+        e.preventDefault();
+
+        const username = document.getElementById('adminUsername').value;
+        const email = document.getElementById('adminEmail').value;
+        const password = document.getElementById('adminPassword').value;
+
+        const success = await this.createAdministrator(username, email, password);
+        if (success) {
+            this.hideAdministratorModal();
+        }
     }
 
     showError(message) {

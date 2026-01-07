@@ -122,6 +122,58 @@ chmod 600 nginx/ssl/key.pem
 chmod 644 nginx/ssl/cert.pem
 ```
 
+### Getting Started
+
+**📖 For detailed setup instructions, see [SETUP-GUIDE.md](SETUP-GUIDE.md)**
+
+### Quick Start
+
+1. **Install dependencies:**
+```bash
+npm install
+```
+
+2. **Configure environment variables:**
+   - Copy `.env.example` to `.env` (if exists) or create new `.env`
+   - Set DATABASE_URL or DB_* variables
+   - Generate strong JWT_SECRET: `node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"`
+   - Configure M-Pesa credentials
+
+3. **Run database migrations:**
+```bash
+npm run migrate
+```
+
+4. **Create admin user (SECURE):**
+```bash
+node scripts/setup-admin.js
+```
+   - Follow prompts to create admin credentials
+   - Never use hardcoded passwords
+
+5. **Build and start:**
+```bash
+npm run build
+npm start
+```
+
+6. **Access the system:**
+   - User Portal: http://localhost:3000/portal
+   - Admin Panel: http://localhost:3000/api/admin
+   - Health Check: http://localhost:3000/health
+
+### Security First
+
+- ✅ All credentials are entered interactively
+- ✅ No hardcoded passwords in code
+- ✅ Passwords are hashed with bcrypt (12 rounds)
+- ✅ JWT tokens with secure secrets
+- ✅ Rate limiting on all auth endpoints
+- ✅ Input sanitization and validation
+- ✅ M-Pesa callback authentication
+
+See [SECURITY-AUDIT-REPORT.md](SECURITY-AUDIT-REPORT.md) for full security details.
+
 ### 4. Database Setup
 
 ```bash

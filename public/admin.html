@@ -9,6 +9,33 @@
     <style>
         .sidebar-transition { transition: transform 0.3s ease-in-out; }
         .table-row:hover { background-color: rgba(59, 130, 246, 0.05); }
+        
+        /* Modal Styles */
+        .modal {
+            position: fixed;
+            inset: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+            padding: 1rem;
+        }
+        
+        .modal.hidden {
+            display: none;
+        }
+        
+        .modal-content {
+            background-color: white;
+            border-radius: 0.5rem;
+            padding: 1.5rem;
+            max-width: 28rem;
+            width: 100%;
+            margin: 0 1rem;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
     </style>
 </head>
 <body class="bg-gray-100">
@@ -82,7 +109,11 @@
                             <i class="fas fa-users mr-3"></i>Sessions
                         </a>
                         <a href="#" data-section="payments" class="nav-link flex items-center px-4 py-2 rounded-lg hover:bg-gray-700 transition duration-200">
-                            <i class="fas fa-credit-card mr-3"></i>Payments
+                            <i class="fas fa-money-bill-wave mr-3"></i>Payments
+                        </a>
+                        <a href="#" class="nav-link" data-section="administrators">
+                            <i class="fas fa-user-shield mr-3"></i>
+                            Administrators
                         </a>
                     </div>
                 </div>
@@ -212,10 +243,88 @@
                 </div>
 
                 <div id="paymentsSection" class="section hidden">
-                    <h2 class="text-3xl font-bold text-gray-900 mb-6">Payments</h2>
-                    <p class="text-gray-600">Payment history coming soon...</p>
+                    <h2 class="text-2xl font-bold mb-6">Payment History</h2>
+                    <p class="text-gray-600">Payment history will be displayed here.</p>
+                </div>
+
+                <!-- Administrators Section -->
+                <div id="administratorsSection" class="section hidden">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-2xl font-bold">Administrator Management</h2>
+                        <button id="addAdministratorButton" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition duration-200">
+                            <i class="fas fa-plus mr-2"></i>Add Administrator
+                        </button>
+                    </div>
+
+                    <div class="bg-white rounded-lg shadow overflow-hidden">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Username</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="administratorsTable" class="bg-white divide-y divide-gray-200">
+                                <!-- Administrators will be loaded here -->
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </main>
+        </div>
+    </div>
+
+    <!-- Add Administrator Modal -->
+    <div id="administratorModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="flex justify-between items-center mb-4">
+                <h3 id="administratorModalTitle" class="text-xl font-bold">Add Administrator</h3>
+                <button id="closeAdministratorModal" class="text-gray-500 hover:text-gray-700">
+                    <i class="fas fa-times text-2xl"></i>
+                </button>
+            </div>
+            
+            <form id="administratorForm">
+                <div class="mb-4">
+                    <label class="block text-gray-700 text-sm font-bold mb-2" for="adminUsername">
+                        Username *
+                    </label>
+                    <input type="text" id="adminUsername" name="username" required minlength="3" maxlength="30"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                           placeholder="Enter username">
+                </div>
+
+                <div class="mb-4">
+                    <label class="block text-gray-700 text-sm font-bold mb-2" for="adminEmail">
+                        Email *
+                    </label>
+                    <input type="email" id="adminEmail" name="email" required
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                           placeholder="admin@example.com">
+                </div>
+
+                <div class="mb-6">
+                    <label class="block text-gray-700 text-sm font-bold mb-2" for="adminPassword">
+                        Password *
+                    </label>
+                    <input type="password" id="adminPassword" name="password" required minlength="8"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                           placeholder="Minimum 8 characters">
+                    <p class="text-sm text-gray-600 mt-1">Minimum 8 characters required</p>
+                </div>
+
+                <div class="flex gap-4">
+                    <button type="button" id="cancelAdministrator" class="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg transition duration-200">
+                        Cancel
+                    </button>
+                    <button type="submit" id="saveAdministrator" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition duration-200">
+                        Create Administrator
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 
@@ -223,6 +332,7 @@
     <div id="packageModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
         <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
             <div class="flex justify-between items-center mb-4">
+                <h3 id="packageModalTitle" class="text-lg font-bold">Add Package</h3>
                 <h3 id="packageModalTitle" class="text-lg font-bold text-gray-900">Add Package</h3>
                 <button id="closePackageModal" class="text-gray-400 hover:text-gray-600">
                     <i class="fas fa-times"></i>
@@ -257,6 +367,6 @@
         </div>
     </div>
 
-    <script src="admin.js"></script>
+    <script src="/admin.js"></script>
 </body>
 </html>

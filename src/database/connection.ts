@@ -19,7 +19,7 @@ class DatabaseConnection {
             password: process.env.DB_PASSWORD,
             max: 20,
             idleTimeoutMillis: 30000,
-            connectionTimeoutMillis: 2000,
+            connectionTimeoutMillis: 30000,
             ssl: {
                 rejectUnauthorized: false
             }

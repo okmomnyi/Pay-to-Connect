@@ -12,6 +12,7 @@ class WiFiPortal {
         this.checkAuthentication();
         this.loadPackages();
         this.checkExistingSession();
+        this.recoverPendingPayment();
     }
 
     initializeElements() {
@@ -88,17 +89,18 @@ class WiFiPortal {
         const userName = document.getElementById('userName');
 
         if (this.userToken && this.userData.username) {
-            // User is logged in
+            // User is logged in - show user info
             userName.textContent = this.userData.username;
             userInfo.classList.remove('hidden');
             loginRequired.classList.add('hidden');
-            this.loadPackages();
         } else {
-            // User not logged in
+            // User not logged in - hide user info but still allow portal access
             userInfo.classList.add('hidden');
-            loginRequired.classList.remove('hidden');
-            this.hideAllSections();
+            loginRequired.classList.add('hidden'); // Changed: Don't block portal access
         }
+        
+        // Always load packages regardless of auth status (captive portal behavior)
+        this.loadPackages();
     }
 
     logout() {
@@ -268,6 +270,7 @@ class WiFiPortal {
         }
 
         try {
+            // Disable button immediately to prevent double-clicks
             this.payButton.disabled = true;
             this.payButton.innerHTML = '<div class="loading-spinner mr-2"></div>Processing...';
 
@@ -291,6 +294,14 @@ class WiFiPortal {
 
             this.checkoutRequestId = data.checkoutRequestId;
             
+            // Persist payment state to localStorage for recovery on refresh
+            localStorage.setItem('pendingPayment', JSON.stringify({
+                checkoutRequestId: data.checkoutRequestId,
+                amount: data.amount,
+                packageName: data.packageName,
+                timestamp: Date.now()
+            }));
+            
             // Update pending payment display
             document.getElementById('pendingAmount').textContent = `KES ${data.amount}`;
             document.getElementById('pendingPackage').textContent = data.packageName;
@@ -301,7 +312,6 @@ class WiFiPortal {
         } catch (error) {
             console.error('Payment error:', error);
             this.showError(error.message);
-        } finally {
             this.payButton.disabled = false;
             this.payButton.innerHTML = '<i class="fas fa-mobile-alt mr-2"></i>Pay with M-Pesa';
         }
@@ -341,9 +351,13 @@ class WiFiPortal {
                 this.displaySuccessSession(data.session);
                 this.showPaymentStatus('success');
                 this.clearStatusCheck();
+                // Clear pending payment from localStorage
+                localStorage.removeItem('pendingPayment');
             } else if (data.status === 'failed' || data.status === 'cancelled') {
                 this.showPaymentStatus('failed');
                 this.clearStatusCheck();
+                // Clear pending payment from localStorage
+                localStorage.removeItem('pendingPayment');
             }
             // If still pending, continue checking
         } catch (error) {
@@ -376,15 +390,30 @@ class WiFiPortal {
 
     startCountdown(initialSeconds) {
         let remainingSeconds = initialSeconds;
+        let warningShown = false;
         
         const countdown = setInterval(() => {
             remainingSeconds--;
             
+            // Show warning when 5 minutes remaining
+            if (remainingSeconds === 300 && !warningShown) {
+                this.showError('Your session will expire in 5 minutes');
+                warningShown = true;
+            }
+            
             if (remainingSeconds <= 0) {
                 clearInterval(countdown);
                 this.updateTimeRemaining(0);
-                this.showError('Your session has expired');
-                setTimeout(() => this.showPackages(), 3000);
+                this.showError('Your session has expired. Redirecting to purchase page...');
+                
+                // Clear any stored session data
+                localStorage.removeItem('pendingPayment');
+                
+                // Redirect to portal after 3 seconds
+                setTimeout(() => {
+                    this.showPackages();
+                    window.location.reload(); // Reload to check for new session
+                }, 3000);
             } else {
                 this.updateTimeRemaining(remainingSeconds);
             }
