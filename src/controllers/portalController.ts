@@ -117,8 +117,17 @@ class PortalController {
         }
     };
 
-    public initiatePayment = async (req: Request, res: Response): Promise<void> => {
+    public initiatePayment = async (req: any, res: Response): Promise<void> => {
         try {
+            // Check if user is authenticated
+            if (!req.user || !req.user.userId) {
+                res.status(401).json({
+                    success: false,
+                    error: 'Authentication required. Please login to purchase packages.'
+                });
+                return;
+            }
+
             // Validate request
             const schema = Joi.object({
                 phone: Joi.string().pattern(/^(\+254|254|0)?[17]\d{8}$/).required(),
@@ -136,6 +145,7 @@ class PortalController {
             }
 
             const { phone, packageId, macAddress }: PaymentRequest = value;
+            const userId = req.user.userId;
 
             // Validate MAC address format
             const macRegex = /^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/;
@@ -264,8 +274,17 @@ class PortalController {
         }
     };
 
-    public getPaymentStatus = async (req: Request, res: Response): Promise<void> => {
+    public getPaymentStatus = async (req: any, res: Response): Promise<void> => {
         try {
+            // Check if user is authenticated
+            if (!req.user || !req.user.userId) {
+                res.status(401).json({
+                    success: false,
+                    error: 'Authentication required'
+                });
+                return;
+            }
+
             const { checkoutRequestId } = req.params;
 
             if (!checkoutRequestId) {

@@ -41,4 +41,34 @@ export const authenticateToken = (req: AuthRequest, res: Response, next: NextFun
     }
 };
 
-export { AuthRequest };
+// User authentication middleware (same as authenticateToken but for user routes)
+export const authenticateUser = (req: AuthRequest, res: Response, next: NextFunction): void => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+
+    if (!token) {
+        res.status(401).json({
+            success: false,
+            error: 'Authentication required. Please login to continue.'
+        });
+        return;
+    }
+
+    try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET!) as any;
+        req.user = {
+            userId: decoded.userId,
+            username: decoded.username,
+            email: decoded.email
+        };
+        next();
+    } catch (error) {
+        logger.warn('Invalid user token attempt:', { token: token.substring(0, 20) + '...' });
+        res.status(403).json({
+            success: false,
+            error: 'Invalid or expired session. Please login again.'
+        });
+    }
+};
+
+export { AuthRequest, AdminUser };

@@ -89,18 +89,17 @@ class WiFiPortal {
         const userName = document.getElementById('userName');
 
         if (this.userToken && this.userData.username) {
-            // User is logged in - show user info
+            // User is logged in - show user info and load packages
             userName.textContent = this.userData.username;
             userInfo.classList.remove('hidden');
             loginRequired.classList.add('hidden');
+            this.loadPackages();
         } else {
-            // User not logged in - hide user info but still allow portal access
+            // User not logged in - show login required message
             userInfo.classList.add('hidden');
-            loginRequired.classList.add('hidden'); // Changed: Don't block portal access
+            loginRequired.classList.remove('hidden');
+            this.hideAllSections();
         }
-        
-        // Always load packages regardless of auth status (captive portal behavior)
-        this.loadPackages();
     }
 
     logout() {
@@ -274,11 +273,18 @@ class WiFiPortal {
             this.payButton.disabled = true;
             this.payButton.innerHTML = '<div class="loading-spinner mr-2"></div>Processing...';
 
+            const headers = {
+                'Content-Type': 'application/json'
+            };
+            
+            // Add authentication token if available
+            if (this.userToken) {
+                headers['Authorization'] = `Bearer ${this.userToken}`;
+            }
+
             const response = await fetch('/api/portal/pay', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
+                headers: headers,
                 body: JSON.stringify({
                     phone: phone,
                     packageId: this.currentPackage.id,

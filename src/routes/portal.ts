@@ -2,6 +2,7 @@ import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import PortalController from '../controllers/portalController';
 import { validateMpesaCallback, preventDuplicateCallback } from '../middleware/mpesaAuth';
+import { authenticateUser } from '../middleware/auth';
 
 const router = Router();
 const portalController = new PortalController();
@@ -31,10 +32,12 @@ const statusLimiter = rateLimit({
 
 // Public portal endpoints
 router.get('/packages', portalController.getPackages);
-router.post('/pay', paymentLimiter, portalController.initiatePayment);
-router.post('/payment', paymentLimiter, portalController.initiatePayment); // Added for API compatibility
-router.get('/status/:checkoutRequestId', statusLimiter, portalController.getPaymentStatus);
-router.get('/device/:macAddress', statusLimiter, portalController.getDeviceStatus);
+
+// Protected portal endpoints - require user authentication
+router.post('/pay', authenticateUser, paymentLimiter, portalController.initiatePayment);
+router.post('/payment', authenticateUser, paymentLimiter, portalController.initiatePayment); // Added for API compatibility
+router.get('/status/:checkoutRequestId', authenticateUser, statusLimiter, portalController.getPaymentStatus);
+router.get('/device/:macAddress', authenticateUser, statusLimiter, portalController.getDeviceStatus);
 
 // M-Pesa callback endpoint (with authentication and duplicate prevention)
 router.post('/mpesa/callback', validateMpesaCallback, preventDuplicateCallback, portalController.handleMpesaCallback);
