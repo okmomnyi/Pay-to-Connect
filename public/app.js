@@ -9,10 +9,12 @@ class WiFiPortal {
         
         this.initializeElements();
         this.bindEvents();
-        this.checkAuthentication();
-        this.loadPackages();
-        this.checkExistingSession();
-        this.recoverPendingPayment();
+        this.checkAuthentication(); // This will call loadPackages if authenticated
+        // Only check existing session and recover payment if authenticated
+        if (this.userToken) {
+            this.checkExistingSession();
+            this.recoverPendingPayment();
+        }
     }
 
     initializeElements() {
@@ -145,14 +147,14 @@ class WiFiPortal {
     }
 
     hideAllSections() {
-        this.loadingState.classList.add('hidden');
-        this.errorState.classList.add('hidden');
-        this.packagesList.classList.add('hidden');
-        this.paymentForm.classList.add('hidden');
-        this.paymentStatus.classList.add('hidden');
-        this.paymentPending.classList.add('hidden');
-        this.paymentSuccess.classList.add('hidden');
-        this.paymentFailed.classList.add('hidden');
+        if (this.loadingState) this.loadingState.classList.add('hidden');
+        if (this.errorState) this.errorState.classList.add('hidden');
+        if (this.packagesList) this.packagesList.classList.add('hidden');
+        if (this.paymentForm) this.paymentForm.classList.add('hidden');
+        if (this.paymentStatus) this.paymentStatus.classList.add('hidden');
+        if (this.paymentPending) this.paymentPending.classList.add('hidden');
+        if (this.paymentSuccess) this.paymentSuccess.classList.add('hidden');
+        if (this.paymentFailed) this.paymentFailed.classList.add('hidden');
     }
 
     showLoading() {
