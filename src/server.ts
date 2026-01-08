@@ -12,7 +12,7 @@ import { sanitizeInput, validateNoSQLInjection } from './middleware/sanitize';
 
 import portalRoutes from './routes/portal';
 import adminRoutes from './routes/admin';
-import userRoutes from './routes/user';
+import userRoutes from './routes/userRoutes';
 
 // Load environment variables
 dotenv.config();

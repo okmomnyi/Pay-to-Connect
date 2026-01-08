@@ -342,9 +342,19 @@ class PortalController {
         }
     };
 
-    public getDeviceStatus = async (req: Request, res: Response): Promise<void> => {
+    public getDeviceStatus = async (req: any, res: Response): Promise<void> => {
         try {
+            // Check if user is authenticated
+            if (!req.user || !req.user.userId) {
+                res.status(401).json({
+                    success: false,
+                    error: 'Authentication required'
+                });
+                return;
+            }
+
             const { macAddress } = req.params;
+            const userId = req.user.userId;
 
             if (!macAddress) {
                 res.status(400).json({
@@ -365,7 +375,7 @@ class PortalController {
             }
 
             try {
-                // Check for active session
+                // Check for active session - only for devices owned by this user
                 const sessionResult = await this.db.query(`
                     SELECT s.id, s.end_time, p.name as package_name,
                            EXTRACT(EPOCH FROM (s.end_time - NOW()))::INTEGER as remaining_seconds,
@@ -374,10 +384,13 @@ class PortalController {
                     JOIN packages p ON s.package_id = p.id
                     JOIN devices d ON s.device_id = d.id
                     LEFT JOIN payments py ON s.payment_id = py.id
-                    WHERE d.mac_address = $1 AND s.active = true AND s.end_time > NOW()
+                    WHERE d.mac_address = $1 
+                    AND d.user_id = $2
+                    AND s.active = true 
+                    AND s.end_time > NOW()
                     ORDER BY s.created_at DESC
                     LIMIT 1
-                `, [macAddress]);
+                `, [macAddress, userId]);
 
             if (sessionResult.rows.length === 0) {
                 res.json({

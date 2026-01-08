@@ -495,6 +495,29 @@ class RadiusService {
             logger.error('Failed to expire old sessions:', error);
         }
     }
+
+    public async disconnectDevice(macAddress: string): Promise<void> {
+        try {
+            logger.info(`Disconnecting device: ${macAddress}`);
+            
+            // Update session to inactive
+            await this.db.query(`
+                UPDATE sessions s
+                SET active = false
+                FROM devices d
+                WHERE s.device_id = d.id 
+                AND d.mac_address = $1 
+                AND s.active = true
+            `, [macAddress]);
+
+            // In a real implementation, this would send a RADIUS Disconnect-Request
+            // to the NAS/router to immediately terminate the user's session
+            logger.info(`Device ${macAddress} disconnected successfully`);
+        } catch (error) {
+            logger.error(`Failed to disconnect device ${macAddress}:`, error);
+            throw error;
+        }
+    }
 }
 
 export default RadiusService;
