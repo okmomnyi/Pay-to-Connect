@@ -65,8 +65,13 @@ export class SessionService {
         const macAddress = deviceResult.rows[0]?.mac_address;
 
         if (macAddress) {
-            const radiusService = new RadiusService();
-            await radiusService.authorizeDevice(macAddress, routerId, session.id);
+            const routerResult = await pool.query('SELECT ip_address FROM routers WHERE id = $1', [routerId]);
+            const routerIp = routerResult.rows[0]?.ip_address;
+            
+            if (routerIp) {
+                const radiusService = new RadiusService();
+                await radiusService.authorizeDevice(macAddress, routerIp);
+            }
         }
 
         logger.info(`Session created for user ${userId}: ${session.id}`);
