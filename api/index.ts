@@ -4,9 +4,9 @@ import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
 
-import portalRoutes from '../src/routes/mockPortal';
+import portalRoutes from '../src/routes/portal';
 import adminRoutes from '../src/routes/admin';
-import userRoutes from '../src/routes/user';
+import userRoutes from '../src/routes/userRoutes';
 
 // Load environment variables
 dotenv.config();
