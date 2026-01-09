@@ -41,6 +41,7 @@ class Server {
                     defaultSrc: ["'self'"],
                     styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.tailwindcss.com", "https://cdnjs.cloudflare.com"],
                     scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://cdn.tailwindcss.com"],
+                    scriptSrcAttr: ["'unsafe-inline'"],
                     imgSrc: ["'self'", "data:", "https:"],
                     connectSrc: ["'self'", "http://localhost:3000", "https://localhost:3000"],
                     fontSrc: ["'self'", "https://cdnjs.cloudflare.com", "data:"],
