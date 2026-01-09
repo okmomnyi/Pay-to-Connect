@@ -24,12 +24,16 @@ async function runMigrations() {
         const srcDir = join(__dirname, '..', '..', 'src', 'database');
         const schemaSQL = readFileSync(join(srcDir, 'schema.sql'), 'utf8');
         const authSchemaSQL = readFileSync(join(srcDir, 'auth-schema.sql'), 'utf8');
+        const userProfileSchemaSQL = readFileSync(join(srcDir, 'user-profile-schema.sql'), 'utf8');
         
         console.log('Running main schema...');
         await pool.query(schemaSQL);
         
         console.log('Running auth schema...');
         await pool.query(authSchemaSQL);
+        
+        console.log('Running user profile schema...');
+        await pool.query(userProfileSchemaSQL);
         
         console.log('Database migration completed successfully!');
         
