@@ -42,6 +42,7 @@ router.post('/routers', authenticateToken, adminController.createRouter);
 // Session and payment monitoring
 router.get('/sessions', authenticateToken, adminController.getSessions);
 router.get('/payments', authenticateToken, adminController.getPayments);
+router.post('/payments/:id/approve', authenticateToken, adminController.approvePayment);
 
 // Administrator management
 router.get('/administrators', authenticateToken, adminController.getAdministrators);

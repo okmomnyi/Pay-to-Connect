@@ -4,6 +4,14 @@ class AdminPanel {
         this.currentSection = 'dashboard';
         this.editingPackageId = null;
         
+        // Prevent back button after logout
+        window.history.pushState(null, '', window.location.href);
+        window.onpopstate = function() {
+            if (!localStorage.getItem('adminToken')) {
+                window.history.pushState(null, '', window.location.href);
+            }
+        };
+        
         this.initializeElements();
         this.bindEvents();
         
@@ -175,7 +183,20 @@ class AdminPanel {
         localStorage.removeItem('adminToken');
         localStorage.removeItem('adminUser');
         this.token = null;
+        
+        // Prevent browser back button from accessing cached pages
+        window.history.pushState(null, '', window.location.href);
+        window.onpopstate = function() {
+            window.history.pushState(null, '', window.location.href);
+        };
+        
+        // Clear the page and redirect
         this.showLoginModal();
+        
+        // Force reload to clear cache
+        setTimeout(() => {
+            window.location.replace('/api/admin');
+        }, 100);
     }
 
     showLoginError(message) {
@@ -185,6 +206,50 @@ class AdminPanel {
 
     hideLoginError() {
         this.loginError.classList.add('hidden');
+    }
+
+    // Toast notification methods
+    showToast(message, type = 'info') {
+        const container = document.getElementById('toastContainer');
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        
+        const icons = {
+            success: 'fa-check-circle',
+            error: 'fa-exclamation-circle',
+            info: 'fa-info-circle',
+            warning: 'fa-exclamation-triangle'
+        };
+        
+        toast.innerHTML = `
+            <i class="fas ${icons[type]} toast-icon"></i>
+            <div class="toast-message">${message}</div>
+            <span class="toast-close" onclick="this.parentElement.remove()">×</span>
+        `;
+        
+        container.appendChild(toast);
+        
+        // Auto remove after 5 seconds
+        setTimeout(() => {
+            toast.classList.add('removing');
+            setTimeout(() => toast.remove(), 300);
+        }, 5000);
+    }
+
+    showSuccess(message) {
+        this.showToast(message, 'success');
+    }
+
+    showError(message) {
+        this.showToast(message, 'error');
+    }
+
+    showInfo(message) {
+        this.showToast(message, 'info');
+    }
+
+    showWarning(message) {
+        this.showToast(message, 'warning');
     }
 
     toggleSidebar() {
@@ -524,6 +589,8 @@ class AdminPanel {
         if (!confirm('Are you sure you want to delete this package? This action cannot be undone.')) {
             return;
         }
+
+        this.showInfo('Deleting package...');
 
         try {
             const response = await this.makeAuthenticatedRequest(`/api/admin/packages/${packageId}`, {
