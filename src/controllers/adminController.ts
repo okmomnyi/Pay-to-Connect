@@ -519,7 +519,7 @@ class AdminController {
 
             const [paymentsResult, countResult] = await Promise.all([
                 this.db.query(`
-                    SELECT id, phone, amount, mpesa_receipt, status, created_at
+                    SELECT id, phone, amount, mpesa_receipt, status, created_at, mpesa_checkout_request_id
                     FROM payments
                     ORDER BY created_at DESC
                     LIMIT $1 OFFSET $2
@@ -533,7 +533,8 @@ class AdminController {
                 amount: parseFloat(payment.amount),
                 mpesaReceipt: payment.mpesa_receipt,
                 status: payment.status,
-                createdAt: payment.created_at
+                createdAt: payment.created_at,
+                checkoutRequestId: payment.mpesa_checkout_request_id
             }));
 
             const total = parseInt(countResult.rows[0].total);
@@ -551,6 +552,83 @@ class AdminController {
             });
         } catch (error) {
             logger.error('Failed to get payments:', error);
+            res.status(500).json({
+                success: false,
+                error: 'Internal server error'
+            });
+        }
+    };
+
+    public approvePayment = async (req: AuthRequest, res: Response): Promise<void> => {
+        try {
+            const { id } = req.params;
+            const { mpesaReceipt } = req.body;
+
+            // Check if payment exists and is pending
+            const paymentResult = await this.db.query(
+                'SELECT id, status, device_id, package_id, amount FROM payments WHERE id = $1',
+                [id]
+            );
+
+            if (paymentResult.rows.length === 0) {
+                res.status(404).json({
+                    success: false,
+                    error: 'Payment not found'
+                });
+                return;
+            }
+
+            const payment = paymentResult.rows[0];
+
+            if (payment.status !== 'pending') {
+                res.status(400).json({
+                    success: false,
+                    error: `Payment already ${payment.status}`
+                });
+                return;
+            }
+
+            // Update payment to success
+            const receipt = mpesaReceipt || `TEST${Date.now()}`;
+            await this.db.query(
+                `UPDATE payments 
+                 SET status = 'success', mpesa_receipt = $1, updated_at = NOW()
+                 WHERE id = $2`,
+                [receipt, id]
+            );
+
+            // Create session for the user
+            const packageResult = await this.db.query(
+                'SELECT duration_minutes FROM packages WHERE id = $1',
+                [payment.package_id]
+            );
+
+            if (packageResult.rows.length > 0) {
+                const durationMinutes = packageResult.rows[0].duration_minutes;
+                const endTime = new Date(Date.now() + durationMinutes * 60 * 1000);
+
+                // Get first available router
+                const routerResult = await this.db.query(
+                    'SELECT id FROM routers WHERE active = true LIMIT 1'
+                );
+
+                if (routerResult.rows.length > 0) {
+                    await this.db.query(
+                        `INSERT INTO sessions (device_id, package_id, router_id, payment_id, start_time, end_time, active)
+                         VALUES ($1, $2, $3, $4, NOW(), $5, true)`,
+                        [payment.device_id, payment.package_id, routerResult.rows[0].id, id, endTime]
+                    );
+                }
+            }
+
+            logger.info(`Payment ${id} manually approved by admin`);
+
+            res.json({
+                success: true,
+                message: 'Payment approved successfully'
+            });
+        } catch (error) {
+            logger.error('Failed to approve payment:', error);
             res.status(500).json({
                 success: false,
                 error: 'Internal server error'
