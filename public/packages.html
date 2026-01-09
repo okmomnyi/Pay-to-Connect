@@ -339,8 +339,14 @@
             } finally {
                 localStorage.removeItem('authToken');
                 localStorage.removeItem('user');
-                localStorage.removeItem('selectedPackage');
-                window.location.reload();
+                
+                // Prevent browser back button from accessing cached pages
+                window.history.pushState(null, '', window.location.href);
+                window.onpopstate = function() {
+                    window.history.pushState(null, '', window.location.href);
+                };
+                
+                window.location.replace('/user-login.html');
             }
         }
 

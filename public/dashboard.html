@@ -720,9 +720,25 @@
                 if (sessionCheckInterval) {
                     clearInterval(sessionCheckInterval);
                 }
-                window.location.href = '/packages.html';
+                
+                // Prevent browser back button from accessing cached pages
+                window.history.pushState(null, '', window.location.href);
+                window.onpopstate = function() {
+                    window.history.pushState(null, '', window.location.href);
+                };
+                
+                // Force reload and redirect to clear cache
+                window.location.replace('/packages.html');
             }
         }
+
+        // Prevent back button after logout
+        window.history.pushState(null, '', window.location.href);
+        window.onpopstate = function() {
+            if (!localStorage.getItem('authToken')) {
+                window.history.pushState(null, '', window.location.href);
+            }
+        };
 
         loadDashboard();
     </script>
