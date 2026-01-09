@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Internet Packages - Pay to Connect</title>
+    <title>Internet Packages - SmartWiFi</title>
     <style>
         * {
             margin: 0;
@@ -27,6 +27,7 @@
             text-align: center;
             color: white;
             margin-bottom: 40px;
+            position: relative;
         }
 
         .header h1 {
@@ -37,6 +38,30 @@
         .header p {
             font-size: 1.1rem;
             opacity: 0.9;
+        }
+
+        .header-actions {
+            position: absolute;
+            top: 0;
+            right: 0;
+            display: flex;
+            gap: 10px;
+        }
+
+        .header-btn {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+        }
+
+        .header-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            border-color: rgba(255, 255, 255, 0.5);
         }
 
         .packages-grid {
@@ -184,6 +209,10 @@
 <body>
     <div class="container">
         <div class="header">
+            <div class="header-actions" id="header-actions" style="display: none;">
+                <button class="header-btn" onclick="window.location.href='/dashboard.html'">Dashboard</button>
+                <button class="header-btn" onclick="logout()">Logout</button>
+            </div>
             <h1>🌐 Choose Your Internet Package</h1>
             <p>Select a package below to get connected</p>
         </div>
@@ -201,6 +230,13 @@
 
     <script>
         const API_URL = window.location.origin;
+
+        function checkAuth() {
+            const token = localStorage.getItem('authToken');
+            if (token) {
+                document.getElementById('header-actions').style.display = 'flex';
+            }
+        }
 
         async function loadPackages() {
             try {
@@ -288,6 +324,28 @@
             }
         }
 
+        async function logout() {
+            try {
+                const token = localStorage.getItem('authToken');
+                if (token) {
+                    await fetch(`${API_URL}/api/user/auth/logout`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        }
+                    });
+                }
+            } catch (error) {
+                console.error('Logout error:', error);
+            } finally {
+                localStorage.removeItem('authToken');
+                localStorage.removeItem('user');
+                localStorage.removeItem('selectedPackage');
+                window.location.reload();
+            }
+        }
+
+        checkAuth();
         loadPackages();
     </script>
 </body>

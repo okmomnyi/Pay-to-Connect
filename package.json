@@ -1,7 +1,7 @@
 {
-  "name": "pay-to-connect",
+  "name": "smartwifi",
   "version": "1.0.0",
-  "description": "Production-ready paid Wi-Fi captive portal and billing system",
+  "description": "SmartWiFi - Production-ready Wi-Fi captive portal and billing system",
   "main": "dist/server.js",
   "scripts": {
     "build": "tsc",
