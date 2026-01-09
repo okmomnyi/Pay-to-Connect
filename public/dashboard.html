@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard - Pay to Connect</title>
+    <title>Dashboard - SmartWiFi</title>
     <style>
         * {
             margin: 0;
@@ -340,7 +340,7 @@
 </head>
 <body>
     <div class="navbar">
-        <h1>🌐 Pay to Connect</h1>
+        <h1>🌐 SmartWiFi</h1>
         <div class="navbar-actions">
             <button class="navbar-btn" onclick="window.location.href='/profile.html'">Profile</button>
             <button class="navbar-btn" onclick="logout()">Logout</button>
@@ -700,14 +700,28 @@
             window.location.href = '/packages.html';
         }
 
-        function logout() {
-            localStorage.removeItem('authToken');
-            localStorage.removeItem('user');
-            localStorage.removeItem('selectedPackage');
-            if (sessionCheckInterval) {
-                clearInterval(sessionCheckInterval);
+        async function logout() {
+            try {
+                const token = localStorage.getItem('authToken');
+                if (token) {
+                    await fetch(`${API_URL}/api/user/auth/logout`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        }
+                    });
+                }
+            } catch (error) {
+                console.error('Logout error:', error);
+            } finally {
+                localStorage.removeItem('authToken');
+                localStorage.removeItem('user');
+                localStorage.removeItem('selectedPackage');
+                if (sessionCheckInterval) {
+                    clearInterval(sessionCheckInterval);
+                }
+                window.location.href = '/packages.html';
             }
-            window.location.href = '/packages.html';
         }
 
         loadDashboard();

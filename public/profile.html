@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Profile - Pay to Connect</title>
+    <title>Profile - SmartWiFi</title>
     <style>
         * {
             margin: 0;
@@ -44,6 +44,11 @@
 
         .navbar-btn:hover {
             background: rgba(255, 255, 255, 0.3);
+        }
+
+        .navbar-actions {
+            display: flex;
+            gap: 10px;
         }
 
         .container {
@@ -249,7 +254,10 @@
 <body>
     <div class="navbar">
         <h1>🌐 My Profile</h1>
-        <button class="navbar-btn" onclick="window.location.href='/dashboard.html'">← Dashboard</button>
+        <div class="navbar-actions">
+            <button class="navbar-btn" onclick="window.location.href='/dashboard.html'">← Dashboard</button>
+            <button class="navbar-btn" onclick="logout()">Logout</button>
+        </div>
     </div>
 
     <div class="container">
@@ -525,11 +533,25 @@
             }
         }
 
-        function logout() {
-            localStorage.removeItem('authToken');
-            localStorage.removeItem('user');
-            localStorage.removeItem('selectedPackage');
-            window.location.href = '/packages.html';
+        async function logout() {
+            try {
+                const token = localStorage.getItem('authToken');
+                if (token) {
+                    await fetch(`${API_URL}/api/user/auth/logout`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        }
+                    });
+                }
+            } catch (error) {
+                console.error('Logout error:', error);
+            } finally {
+                localStorage.removeItem('authToken');
+                localStorage.removeItem('user');
+                localStorage.removeItem('selectedPackage');
+                window.location.href = '/packages.html';
+            }
         }
 
         loadProfile();

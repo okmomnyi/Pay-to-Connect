@@ -1,6 +1,6 @@
-# Pay-to-Connect Wi-Fi Captive Portal System
+# SmartWiFi - Wi-Fi Captive Portal System
 
-A production-ready paid Wi-Fi captive portal and billing system with M-Pesa integration for estate-level deployments.
+A production-ready Wi-Fi captive portal and billing system with M-Pesa integration for seamless internet access management.
 
 ## 🚀 Features
 
@@ -56,8 +56,8 @@ A production-ready paid Wi-Fi captive portal and billing system with M-Pesa inte
 ### 1. Clone Repository
 
 ```bash
-git clone https://github.com/your-org/pay-to-connect.git
-cd pay-to-connect
+git clone https://github.com/your-org/smartwifi.git
+cd smartwifi
 ```
 
 ### 2. Environment Configuration
@@ -71,10 +71,10 @@ Configure all environment variables:
 
 ```env
 # Database Configuration
-DATABASE_URL=postgresql://postgres:your_password@localhost:5432/pay_to_connect
+DATABASE_URL=postgresql://postgres:your_password@localhost:5432/smartwifi
 DB_HOST=localhost
 DB_PORT=5432
-DB_NAME=pay_to_connect
+DB_NAME=smartwifi
 DB_USER=postgres
 DB_PASSWORD=your_secure_password
 
@@ -122,10 +122,6 @@ chmod 600 nginx/ssl/key.pem
 chmod 644 nginx/ssl/cert.pem
 ```
 
-### Getting Started
-
-**📖 For detailed setup instructions, see [SETUP-GUIDE.md](SETUP-GUIDE.md)**
-
 ### Quick Start
 
 1. **Install dependencies:**
@@ -172,7 +168,7 @@ npm start
 - ✅ Input sanitization and validation
 - ✅ M-Pesa callback authentication
 
-See [SECURITY-AUDIT-REPORT.md](SECURITY-AUDIT-REPORT.md) for full security details.
+All security measures are implemented following industry best practices.
 
 ### 4. Database Setup
 
@@ -324,7 +320,7 @@ curl https://yourdomain.com/health
 
 ```bash
 # PostgreSQL stats
-docker-compose exec postgres psql -U postgres -d pay_to_connect -c "SELECT * FROM pg_stat_activity;"
+docker-compose exec postgres psql -U postgres -d smartwifi -c "SELECT * FROM pg_stat_activity;"
 
 # Redis monitoring
 docker-compose exec redis redis-cli info
@@ -416,7 +412,7 @@ BACKUP_DIR="/backups"
 DATE=$(date +%Y%m%d_%H%M%S)
 
 # PostgreSQL backup
-docker-compose exec postgres pg_dump -U postgres pay_to_connect > $BACKUP_DIR/db_$DATE.sql
+docker-compose exec postgres pg_dump -U postgres smartwifi > $BACKUP_DIR/db_$DATE.sql
 
 # Application files backup
 tar -czf $BACKUP_DIR/app_$DATE.tar.gz /path/to/app
@@ -430,7 +426,7 @@ find $BACKUP_DIR -name "*.tar.gz" -mtime +7 -delete
 
 ```bash
 # Restore database
-docker-compose exec postgres psql -U postgres -d pay_to_connect < backup.sql
+docker-compose exec postgres psql -U postgres -d smartwifi < backup.sql
 
 # Restore application
 tar -xzf app_backup.tar.gz -C /

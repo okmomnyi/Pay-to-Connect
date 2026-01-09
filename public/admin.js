@@ -401,8 +401,11 @@ class AdminPanel {
                     <button onclick="adminPanel.editPackage('${pkg.id}')" class="text-indigo-600 hover:text-indigo-900 mr-3">
                         <i class="fas fa-edit"></i> Edit
                     </button>
-                    <button onclick="adminPanel.togglePackageStatus('${pkg.id}', ${!pkg.active})" class="text-${pkg.active ? 'red' : 'green'}-600 hover:text-${pkg.active ? 'red' : 'green'}-900">
+                    <button onclick="adminPanel.togglePackageStatus('${pkg.id}', ${!pkg.active})" class="text-${pkg.active ? 'red' : 'green'}-600 hover:text-${pkg.active ? 'red' : 'green'}-900 mr-3">
                         <i class="fas fa-${pkg.active ? 'ban' : 'check'}"></i> ${pkg.active ? 'Disable' : 'Enable'}
+                    </button>
+                    <button onclick="adminPanel.deletePackage('${pkg.id}')" class="text-red-600 hover:text-red-900">
+                        <i class="fas fa-trash"></i> Delete
                     </button>
                 </td>
             `;
@@ -513,6 +516,31 @@ class AdminPanel {
 
         } catch (error) {
             console.error('Failed to update package status:', error);
+            this.showError(error.message);
+        }
+    }
+
+    async deletePackage(packageId) {
+        if (!confirm('Are you sure you want to delete this package? This action cannot be undone.')) {
+            return;
+        }
+
+        try {
+            const response = await this.makeAuthenticatedRequest(`/api/admin/packages/${packageId}`, {
+                method: 'DELETE'
+            });
+
+            const data = await response.json();
+
+            if (!data.success) {
+                throw new Error(data.error || 'Failed to delete package');
+            }
+
+            this.loadPackages();
+            this.showSuccess('Package deleted successfully');
+
+        } catch (error) {
+            console.error('Failed to delete package:', error);
             this.showError(error.message);
         }
     }
