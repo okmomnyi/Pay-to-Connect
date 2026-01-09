@@ -549,10 +549,24 @@
             } finally {
                 localStorage.removeItem('authToken');
                 localStorage.removeItem('user');
-                localStorage.removeItem('selectedPackage');
-                window.location.href = '/packages.html';
+                
+                // Prevent browser back button from accessing cached pages
+                window.history.pushState(null, '', window.location.href);
+                window.onpopstate = function() {
+                    window.history.pushState(null, '', window.location.href);
+                };
+                
+                window.location.replace('/user-login.html');
             }
         }
+
+        // Prevent back button after logout
+        window.history.pushState(null, '', window.location.href);
+        window.onpopstate = function() {
+            if (!localStorage.getItem('authToken')) {
+                window.history.pushState(null, '', window.location.href);
+            }
+        };
 
         loadProfile();
     </script>
