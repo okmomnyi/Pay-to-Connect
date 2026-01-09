@@ -325,6 +325,38 @@ class AdminController {
         }
     };
 
+    public deletePackage = async (req: AuthRequest, res: Response): Promise<void> => {
+        try {
+            const { id } = req.params;
+
+            const checkResult = await this.db.query(
+                'SELECT id FROM packages WHERE id = $1',
+                [id]
+            );
+
+            if (checkResult.rows.length === 0) {
+                res.status(404).json({
+                    success: false,
+                    error: 'Package not found'
+                });
+                return;
+            }
+
+            await this.db.query('DELETE FROM packages WHERE id = $1', [id]);
+
+            res.json({
+                success: true,
+                message: 'Package deleted successfully'
+            });
+        } catch (error) {
+            logger.error('Failed to delete package:', error);
+            res.status(500).json({
+                success: false,
+                error: 'Internal server error'
+            });
+        }
+    };
+
     public getRouters = async (req: AuthRequest, res: Response): Promise<void> => {
         try {
             const result = await this.db.query(`

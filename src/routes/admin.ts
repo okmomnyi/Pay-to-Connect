@@ -33,6 +33,7 @@ router.get('/dashboard', authenticateToken, adminController.getDashboard);
 router.get('/packages', authenticateToken, adminController.getPackages);
 router.post('/packages', authenticateToken, adminController.createPackage);
 router.put('/packages/:id', authenticateToken, adminController.updatePackage);
+router.delete('/packages/:id', authenticateToken, adminController.deletePackage);
 
 // Router management
 router.get('/routers', authenticateToken, adminController.getRouters);

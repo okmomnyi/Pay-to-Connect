@@ -33,7 +33,7 @@
     },
     {
       "src": "/",
-      "dest": "/public/index.html"
+      "dest": "/public/packages.html"
     }
   ],
   "env": {
