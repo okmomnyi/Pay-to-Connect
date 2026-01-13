@@ -276,3 +276,13 @@ deploy.sh
 deploy.bat
 .vercel
 .env*.local
+
+# Database Files with Sensitive Data (CRITICAL SECURITY)
+src/database/init-admin-user.sql
+src/database/*-with-credentials.sql
+src/database/production-data.sql
+src/database/seed-data.sql
+
+# Generated Admin Setup Files
+admin-credentials.txt
+setup-output.log
