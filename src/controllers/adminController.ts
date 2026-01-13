@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import DatabaseConnection from '../database/connection';
 import { logger } from '../utils/logger';
+import auditService from '../services/auditService';
 import Joi from 'joi';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
@@ -166,9 +167,13 @@ class AdminController {
     };
 
     public getPackages = async (req: AuthRequest, res: Response): Promise<void> => {
+        const startTime = Date.now();
+        
         try {
             const result = await this.db.query(`
-                SELECT id, name, duration_minutes, price_kes, active, created_at, updated_at
+                SELECT id, name, description, package_type, duration_minutes, 
+                       data_limit_mb, speed_limit_mbps, price_kes, active, 
+                       created_at, updated_at
                 FROM packages
                 ORDER BY price_kes ASC
             `);
@@ -176,12 +181,28 @@ class AdminController {
             const packages = result.rows.map((pkg: any) => ({
                 id: pkg.id,
                 name: pkg.name,
+                description: pkg.description,
+                packageType: pkg.package_type,
                 durationMinutes: pkg.duration_minutes,
+                dataLimitMb: pkg.data_limit_mb,
+                speedLimitMbps: pkg.speed_limit_mbps,
                 priceKes: parseFloat(pkg.price_kes),
                 active: pkg.active,
                 createdAt: pkg.created_at,
                 updatedAt: pkg.updated_at
             }));
+
+            // Log successful action
+            await auditService.logAdminAction({
+                adminUserId: req.user!.id,
+                actionType: 'package.list',
+                resourceType: 'package',
+                actionDetails: { count: packages.length },
+                ipAddress: req.ip,
+                userAgent: req.get('User-Agent'),
+                success: true,
+                executionTimeMs: Date.now() - startTime
+            });
 
             res.json({
                 success: true,
@@ -189,18 +210,45 @@ class AdminController {
             });
         } catch (error) {
             logger.error('Failed to get packages:', error);
+            
+            await auditService.logAdminAction({
+                adminUserId: req.user!.id,
+                actionType: 'package.list',
+                resourceType: 'package',
+                actionDetails: {},
+                ipAddress: req.ip,
+                userAgent: req.get('User-Agent'),
+                success: false,
+                errorMessage: error instanceof Error ? error.message : 'Unknown error',
+                executionTimeMs: Date.now() - startTime
+            });
+            
             res.status(500).json({
                 success: false,
-                error: 'Internal server error'
+                error: 'Failed to retrieve packages'
             });
         }
     };
 
     public createPackage = async (req: AuthRequest, res: Response): Promise<void> => {
+        const startTime = Date.now();
+        
         try {
             const schema = Joi.object({
                 name: Joi.string().min(1).max(255).required(),
-                durationMinutes: Joi.number().integer().min(1).required(),
+                description: Joi.string().max(1000).optional(),
+                packageType: Joi.string().valid('time_based', 'data_based', 'hybrid').default('time_based'),
+                durationMinutes: Joi.number().integer().min(1).when('packageType', {
+                    is: Joi.string().valid('time_based', 'hybrid'),
+                    then: Joi.required(),
+                    otherwise: Joi.optional()
+                }),
+                dataLimitMb: Joi.number().integer().min(1).when('packageType', {
+                    is: Joi.string().valid('data_based', 'hybrid'),
+                    then: Joi.required(),
+                    otherwise: Joi.optional()
+                }),
+                speedLimitMbps: Joi.number().integer().min(1).optional(),
                 priceKes: Joi.number().positive().required()
             });
 
@@ -213,45 +261,111 @@ class AdminController {
                 return;
             }
 
-            const { name, durationMinutes, priceKes } = value;
+            const { name, description, packageType, durationMinutes, dataLimitMb, speedLimitMbps, priceKes } = value;
+
+            // Check if package with same name already exists
+            const existingPackage = await this.db.query(
+                'SELECT id FROM packages WHERE name = $1',
+                [name]
+            );
+
+            if (existingPackage.rows.length > 0) {
+                res.status(409).json({
+                    success: false,
+                    error: 'Package with this name already exists'
+                });
+                return;
+            }
 
             const result = await this.db.query(`
-                INSERT INTO packages (name, duration_minutes, price_kes)
-                VALUES ($1, $2, $3)
-                RETURNING id, name, duration_minutes, price_kes, active, created_at
-            `, [name, durationMinutes, priceKes]);
+                INSERT INTO packages (name, description, package_type, duration_minutes, data_limit_mb, speed_limit_mbps, price_kes)
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
+                RETURNING id, name, description, package_type, duration_minutes, data_limit_mb, speed_limit_mbps, price_kes, active, created_at
+            `, [name, description, packageType, durationMinutes, dataLimitMb, speedLimitMbps, priceKes]);
 
             const newPackage = result.rows[0];
+
+            // Log successful action
+            await auditService.logAdminAction({
+                adminUserId: req.user!.id,
+                actionType: 'package.create',
+                resourceType: 'package',
+                resourceId: newPackage.id,
+                resourceName: newPackage.name,
+                actionDetails: {
+                    name,
+                    description,
+                    packageType,
+                    durationMinutes,
+                    dataLimitMb,
+                    speedLimitMbps,
+                    priceKes
+                },
+                ipAddress: req.ip,
+                userAgent: req.get('User-Agent'),
+                success: true,
+                executionTimeMs: Date.now() - startTime
+            });
 
             res.status(201).json({
                 success: true,
                 package: {
                     id: newPackage.id,
                     name: newPackage.name,
+                    description: newPackage.description,
+                    packageType: newPackage.package_type,
                     durationMinutes: newPackage.duration_minutes,
+                    dataLimitMb: newPackage.data_limit_mb,
+                    speedLimitMbps: newPackage.speed_limit_mbps,
                     priceKes: parseFloat(newPackage.price_kes),
                     active: newPackage.active,
                     createdAt: newPackage.created_at
                 }
             });
-        } catch (error) {
+        } catch (error: any) {
             logger.error('Failed to create package:', error);
-            res.status(500).json({
+            
+            await auditService.logAdminAction({
+                adminUserId: req.user!.id,
+                actionType: 'package.create',
+                resourceType: 'package',
+                actionDetails: req.body,
+                ipAddress: req.ip,
+                userAgent: req.get('User-Agent'),
                 success: false,
-                error: 'Internal server error'
+                errorMessage: error.message || 'Unknown error',
+                executionTimeMs: Date.now() - startTime
             });
+            
+            if (error.code === '23505') { // Unique constraint violation
+                res.status(409).json({
+                    success: false,
+                    error: 'Package with this name already exists'
+                });
+            } else {
+                res.status(500).json({
+                    success: false,
+                    error: 'Failed to create package'
+                });
+            }
         }
     };
 
     public updatePackage = async (req: AuthRequest, res: Response): Promise<void> => {
+        const startTime = Date.now();
+        
         try {
             const { id } = req.params;
             
             const schema = Joi.object({
-                name: Joi.string().min(1).max(255),
-                durationMinutes: Joi.number().integer().min(1),
-                priceKes: Joi.number().positive(),
-                active: Joi.boolean()
+                name: Joi.string().min(1).max(255).optional(),
+                description: Joi.string().max(1000).optional(),
+                packageType: Joi.string().valid('time_based', 'data_based', 'hybrid').optional(),
+                durationMinutes: Joi.number().integer().min(1).optional(),
+                dataLimitMb: Joi.number().integer().min(1).optional(),
+                speedLimitMbps: Joi.number().integer().min(1).optional(),
+                priceKes: Joi.number().positive().optional(),
+                active: Joi.boolean().optional()
             });
 
             const { error, value } = schema.validate(req.body);
@@ -263,14 +377,36 @@ class AdminController {
                 return;
             }
 
+            // Get current package for audit logging
+            const currentPackage = await this.db.query(
+                'SELECT id, name FROM packages WHERE id = $1',
+                [id]
+            );
+
+            if (currentPackage.rows.length === 0) {
+                res.status(404).json({
+                    success: false,
+                    error: 'Package not found'
+                });
+                return;
+            }
+
             const updates: string[] = [];
             const values: any[] = [];
             let paramCount = 1;
 
+            // Map frontend field names to database column names
+            const fieldMapping: { [key: string]: string } = {
+                durationMinutes: 'duration_minutes',
+                dataLimitMb: 'data_limit_mb',
+                speedLimitMbps: 'speed_limit_mbps',
+                priceKes: 'price_kes',
+                packageType: 'package_type'
+            };
+
             Object.entries(value).forEach(([key, val]) => {
                 if (val !== undefined) {
-                    const dbKey = key === 'durationMinutes' ? 'duration_minutes' : 
-                                 key === 'priceKes' ? 'price_kes' : key;
+                    const dbKey = fieldMapping[key] || key;
                     updates.push(`${dbKey} = $${paramCount}`);
                     values.push(val);
                     paramCount++;
@@ -290,51 +426,77 @@ class AdminController {
                 UPDATE packages 
                 SET ${updates.join(', ')}, updated_at = NOW()
                 WHERE id = $${paramCount}
-                RETURNING id, name, duration_minutes, price_kes, active, updated_at
+                RETURNING id, name, description, package_type, duration_minutes, data_limit_mb, speed_limit_mbps, price_kes, active, updated_at
             `;
 
             const result = await this.db.query(query, values);
-
-            if (result.rows.length === 0) {
-                res.status(404).json({
-                    success: false,
-                    error: 'Package not found'
-                });
-                return;
-            }
-
             const updatedPackage = result.rows[0];
+
+            // Log successful action
+            await auditService.logAdminAction({
+                adminUserId: req.user!.id,
+                actionType: 'package.update',
+                resourceType: 'package',
+                resourceId: id,
+                resourceName: currentPackage.rows[0].name,
+                actionDetails: value,
+                ipAddress: req.ip,
+                userAgent: req.get('User-Agent'),
+                success: true,
+                executionTimeMs: Date.now() - startTime
+            });
 
             res.json({
                 success: true,
                 package: {
                     id: updatedPackage.id,
                     name: updatedPackage.name,
+                    description: updatedPackage.description,
+                    packageType: updatedPackage.package_type,
                     durationMinutes: updatedPackage.duration_minutes,
+                    dataLimitMb: updatedPackage.data_limit_mb,
+                    speedLimitMbps: updatedPackage.speed_limit_mbps,
                     priceKes: parseFloat(updatedPackage.price_kes),
                     active: updatedPackage.active,
                     updatedAt: updatedPackage.updated_at
                 }
             });
-        } catch (error) {
+        } catch (error: any) {
             logger.error('Failed to update package:', error);
+            
+            await auditService.logAdminAction({
+                adminUserId: req.user!.id,
+                actionType: 'package.update',
+                resourceType: 'package',
+                resourceId: req.params.id,
+                actionDetails: req.body,
+                ipAddress: req.ip,
+                userAgent: req.get('User-Agent'),
+                success: false,
+                errorMessage: error.message || 'Unknown error',
+                executionTimeMs: Date.now() - startTime
+            });
+            
             res.status(500).json({
                 success: false,
-                error: 'Internal server error'
+                error: 'Failed to update package'
             });
         }
     };
 
     public deletePackage = async (req: AuthRequest, res: Response): Promise<void> => {
+        const startTime = Date.now();
+        
         try {
             const { id } = req.params;
 
-            const checkResult = await this.db.query(
-                'SELECT id FROM packages WHERE id = $1',
+            // Get package details for audit logging
+            const packageResult = await this.db.query(
+                'SELECT id, name FROM packages WHERE id = $1',
                 [id]
             );
 
-            if (checkResult.rows.length === 0) {
+            if (packageResult.rows.length === 0) {
                 res.status(404).json({
                     success: false,
                     error: 'Package not found'
@@ -342,17 +504,99 @@ class AdminController {
                 return;
             }
 
-            await this.db.query('DELETE FROM packages WHERE id = $1', [id]);
+            const packageData = packageResult.rows[0];
 
-            res.json({
-                success: true,
-                message: 'Package deleted successfully'
-            });
-        } catch (error) {
+            // Check if package is being used in active sessions
+            const activeSessionsResult = await this.db.query(
+                'SELECT COUNT(*) as count FROM sessions WHERE package_id = $1 AND active = true',
+                [id]
+            );
+
+            const activeSessions = parseInt(activeSessionsResult.rows[0].count);
+            
+            if (activeSessions > 0) {
+                res.status(409).json({
+                    success: false,
+                    error: `Cannot delete package. It has ${activeSessions} active session(s).`
+                });
+                return;
+            }
+
+            // Check if package has been purchased (has payment history)
+            const purchaseHistoryResult = await this.db.query(
+                'SELECT COUNT(*) as count FROM payments WHERE package_id = $1',
+                [id]
+            );
+
+            const hasPurchaseHistory = parseInt(purchaseHistoryResult.rows[0].count) > 0;
+
+            if (hasPurchaseHistory) {
+                // Deactivate instead of delete to preserve purchase history
+                await this.db.query(
+                    'UPDATE packages SET active = false, updated_at = NOW() WHERE id = $1',
+                    [id]
+                );
+                
+                // Log successful action
+                await auditService.logAdminAction({
+                    adminUserId: req.user!.id,
+                    actionType: 'package.deactivate',
+                    resourceType: 'package',
+                    resourceId: id,
+                    resourceName: packageData.name,
+                    actionDetails: { reason: 'has_purchase_history' },
+                    ipAddress: req.ip,
+                    userAgent: req.get('User-Agent'),
+                    success: true,
+                    executionTimeMs: Date.now() - startTime
+                });
+
+                res.json({
+                    success: true,
+                    message: 'Package deactivated successfully (purchase history preserved)'
+                });
+            } else {
+                // Safe to delete - no purchase history
+                await this.db.query('DELETE FROM packages WHERE id = $1', [id]);
+                
+                // Log successful action
+                await auditService.logAdminAction({
+                    adminUserId: req.user!.id,
+                    actionType: 'package.delete',
+                    resourceType: 'package',
+                    resourceId: id,
+                    resourceName: packageData.name,
+                    actionDetails: { reason: 'no_purchase_history' },
+                    ipAddress: req.ip,
+                    userAgent: req.get('User-Agent'),
+                    success: true,
+                    executionTimeMs: Date.now() - startTime
+                });
+
+                res.json({
+                    success: true,
+                    message: 'Package deleted successfully'
+                });
+            }
+        } catch (error: any) {
             logger.error('Failed to delete package:', error);
+            
+            await auditService.logAdminAction({
+                adminUserId: req.user!.id,
+                actionType: 'package.delete',
+                resourceType: 'package',
+                resourceId: req.params.id,
+                actionDetails: {},
+                ipAddress: req.ip,
+                userAgent: req.get('User-Agent'),
+                success: false,
+                errorMessage: error.message || 'Unknown error',
+                executionTimeMs: Date.now() - startTime
+            });
+            
             res.status(500).json({
                 success: false,
-                error: 'Internal server error'
+                error: 'Failed to delete package'
             });
         }
     };
@@ -859,6 +1103,150 @@ class AdminController {
             res.status(500).json({
                 success: false,
                 error: 'Internal server error'
+            });
+        }
+    };
+
+    public getAuditLogs = async (req: AuthRequest, res: Response): Promise<void> => {
+        const startTime = Date.now();
+        
+        try {
+            const page = parseInt(req.query.page as string) || 1;
+            const limit = parseInt(req.query.limit as string) || 50;
+            const offset = (page - 1) * limit;
+            
+            const filters = {
+                adminUserId: req.query.adminUserId as string,
+                actionType: req.query.actionType as string,
+                resourceType: req.query.resourceType as string,
+                success: req.query.success ? req.query.success === 'true' : undefined,
+                startDate: req.query.startDate ? new Date(req.query.startDate as string) : undefined,
+                endDate: req.query.endDate ? new Date(req.query.endDate as string) : undefined,
+                limit,
+                offset
+            };
+
+            const auditLogs = await auditService.getAuditLogs(filters);
+            
+            // Get total count for pagination
+            const countResult = await this.db.query(
+                'SELECT COUNT(*) as total FROM admin_action_logs'
+            );
+            const total = parseInt(countResult.rows[0].total);
+            const totalPages = Math.ceil(total / limit);
+
+            // Log successful action
+            await auditService.logAdminAction({
+                adminUserId: req.user!.id,
+                actionType: 'audit.view_logs',
+                resourceType: 'audit',
+                actionDetails: { filters, count: auditLogs.length },
+                ipAddress: req.ip,
+                userAgent: req.get('User-Agent'),
+                success: true,
+                executionTimeMs: Date.now() - startTime
+            });
+
+            res.json({
+                success: true,
+                auditLogs,
+                pagination: {
+                    page,
+                    limit,
+                    total,
+                    totalPages
+                }
+            });
+        } catch (error) {
+            logger.error('Failed to get audit logs:', error);
+            
+            await auditService.logAdminAction({
+                adminUserId: req.user!.id,
+                actionType: 'audit.view_logs',
+                resourceType: 'audit',
+                actionDetails: {},
+                ipAddress: req.ip,
+                userAgent: req.get('User-Agent'),
+                success: false,
+                errorMessage: error instanceof Error ? error.message : 'Unknown error',
+                executionTimeMs: Date.now() - startTime
+            });
+            
+            res.status(500).json({
+                success: false,
+                error: 'Failed to retrieve audit logs'
+            });
+        }
+    };
+
+    public getSecurityEvents = async (req: AuthRequest, res: Response): Promise<void> => {
+        const startTime = Date.now();
+        
+        try {
+            const page = parseInt(req.query.page as string) || 1;
+            const limit = parseInt(req.query.limit as string) || 50;
+            const offset = (page - 1) * limit;
+            
+            const filters = {
+                eventType: req.query.eventType as string,
+                severity: req.query.severity as string,
+                userId: req.query.userId as string,
+                userType: req.query.userType as string,
+                startDate: req.query.startDate ? new Date(req.query.startDate as string) : undefined,
+                endDate: req.query.endDate ? new Date(req.query.endDate as string) : undefined,
+                limit,
+                offset
+            };
+
+            const securityEvents = await auditService.getSecurityEvents(filters);
+            
+            // Get total count for pagination
+            const countResult = await this.db.query(
+                'SELECT COUNT(*) as total FROM security_event_logs'
+            );
+            const total = parseInt(countResult.rows[0].total);
+            const totalPages = Math.ceil(total / limit);
+
+            // Log successful action
+            await auditService.logAdminAction({
+                adminUserId: req.user!.id,
+                actionType: 'security.view_events',
+                resourceType: 'security',
+                actionDetails: { filters, count: securityEvents.length },
+                ipAddress: req.ip,
+                userAgent: req.get('User-Agent'),
+                success: true,
+                executionTimeMs: Date.now() - startTime
+            });
+
+            res.json({
+                success: true,
+                securityEvents,
+                pagination: {
+                    page,
+                    limit,
+                    total,
+                    totalPages
+                }
+            });
+        } catch (error) {
+            logger.error('Failed to get security events:', error);
+            
+            await auditService.logAdminAction({
+                adminUserId: req.user!.id,
+                actionType: 'security.view_events',
+                resourceType: 'security',
+                actionDetails: {},
+                ipAddress: req.ip,
+                userAgent: req.get('User-Agent'),
+                success: false,
+                errorMessage: error instanceof Error ? error.message : 'Unknown error',
+                executionTimeMs: Date.now() - startTime
+            });
+            
+            res.status(500).json({
+                success: false,
+                error: 'Failed to retrieve security events'
             });
         }
     };
