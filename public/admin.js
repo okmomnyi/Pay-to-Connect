@@ -71,28 +71,34 @@ class AdminPanel {
         this.routerModal = document.getElementById('routerModal');
         this.routerForm = document.getElementById('routerForm');
         this.closeRouterModal = document.getElementById('closeRouterModal');
-        this.cancelRouter = document.getElementById('cancelRouter');
-        this.routerNextButton = document.getElementById('routerNextButton');
+        
+        // Router wizard elements
         this.routerPrevButton = document.getElementById('routerPrevButton');
+        this.routerNextButton = document.getElementById('routerNextButton');
         this.testConnectionButton = document.getElementById('testConnectionButton');
         this.saveRouter = document.getElementById('saveRouter');
         this.toggleRouterPassword = document.getElementById('toggleRouterPassword');
-        
-        // Router wizard state
-        this.currentRouterStep = 1;
-        this.routerData = {};
-        this.connectionTestPassed = false;
+
+        // Sessions and payments
+        this.sessionsTable = document.getElementById('sessionsTable');
+        this.paymentsTable = document.getElementById('paymentsTable');
     }
 
     bindEvents() {
         // Login form
-        this.loginForm.addEventListener('submit', (e) => this.handleLogin(e));
+        if (this.loginForm) {
+            this.loginForm.addEventListener('submit', (e) => this.handleLogin(e));
+        }
 
-        // Logout
-        this.logoutButton.addEventListener('click', () => this.handleLogout());
+        // Logout button
+        if (this.logoutButton) {
+            this.logoutButton.addEventListener('click', () => this.handleLogout());
+        }
 
         // Sidebar toggle
-        this.sidebarToggle.addEventListener('click', () => this.toggleSidebar());
+        if (this.sidebarToggle) {
+            this.sidebarToggle.addEventListener('click', () => this.toggleSidebar());
+        }
 
         // Navigation
         this.navLinks.forEach(link => {
@@ -104,41 +110,70 @@ class AdminPanel {
         });
 
         // Package management
-        this.addPackageButton.addEventListener('click', () => this.showPackageModal());
-        this.closePackageModal.addEventListener('click', () => this.hidePackageModal());
-        this.cancelPackage.addEventListener('click', () => this.hidePackageModal());
-        this.packageForm.addEventListener('submit', (e) => this.handlePackageSubmit(e));
-
-        // Close modal on outside click
-        this.packageModal.addEventListener('click', (e) => {
-            if (e.target === this.packageModal) this.hidePackageModal();
-        });
+        if (this.addPackageButton) {
+            this.addPackageButton.addEventListener('click', () => this.showPackageModal());
+        }
+        if (this.closePackageModal) {
+            this.closePackageModal.addEventListener('click', () => this.hidePackageModal());
+        }
+        if (this.cancelPackage) {
+            this.cancelPackage.addEventListener('click', () => this.hidePackageModal());
+        }
+        if (this.packageForm) {
+            this.packageForm.addEventListener('submit', (e) => this.handlePackageSubmit(e));
+        }
+        if (this.packageModal) {
+            this.packageModal.addEventListener('click', (e) => {
+                if (e.target === this.packageModal) this.hidePackageModal();
+            });
+        }
 
         // Administrator management
-        this.addAdministratorButton.addEventListener('click', () => this.showAdministratorModal());
-        this.closeAdministratorModal.addEventListener('click', () => this.hideAdministratorModal());
-        this.cancelAdministrator.addEventListener('click', () => this.hideAdministratorModal());
-        this.administratorForm.addEventListener('submit', (e) => this.handleAdministratorSubmit(e));
-
-        // Close administrator modal on outside click
-        this.administratorModal.addEventListener('click', (e) => {
-            if (e.target === this.administratorModal) this.hideAdministratorModal();
-        });
+        if (this.addAdministratorButton) {
+            this.addAdministratorButton.addEventListener('click', () => this.showAdministratorModal());
+        }
+        if (this.closeAdministratorModal) {
+            this.closeAdministratorModal.addEventListener('click', () => this.hideAdministratorModal());
+        }
+        if (this.cancelAdministrator) {
+            this.cancelAdministrator.addEventListener('click', () => this.hideAdministratorModal());
+        }
+        if (this.administratorForm) {
+            this.administratorForm.addEventListener('submit', (e) => this.handleAdministratorSubmit(e));
+        }
+        if (this.administratorModal) {
+            this.administratorModal.addEventListener('click', (e) => {
+                if (e.target === this.administratorModal) this.hideAdministratorModal();
+            });
+        }
 
         // Router management
-        this.addRouterButton.addEventListener('click', () => this.showRouterModal());
-        this.closeRouterModal.addEventListener('click', () => this.hideRouterModal());
-        this.cancelRouter.addEventListener('click', () => this.hideRouterModal());
-        this.routerNextButton.addEventListener('click', () => this.nextRouterStep());
-        this.routerPrevButton.addEventListener('click', () => this.prevRouterStep());
-        this.testConnectionButton.addEventListener('click', () => this.testRouterConnection());
-        this.routerForm.addEventListener('submit', (e) => this.handleRouterSubmit(e));
-        this.toggleRouterPassword.addEventListener('click', () => this.togglePasswordVisibility());
-
-        // Close router modal on outside click
-        this.routerModal.addEventListener('click', (e) => {
-            if (e.target === this.routerModal) this.hideRouterModal();
-        });
+        if (this.addRouterButton) {
+            this.addRouterButton.addEventListener('click', () => this.showRouterModal());
+        }
+        if (this.closeRouterModal) {
+            this.closeRouterModal.addEventListener('click', () => this.hideRouterModal());
+        }
+        if (this.routerNextButton) {
+            this.routerNextButton.addEventListener('click', () => this.nextRouterStep());
+        }
+        if (this.routerPrevButton) {
+            this.routerPrevButton.addEventListener('click', () => this.prevRouterStep());
+        }
+        if (this.testConnectionButton) {
+            this.testConnectionButton.addEventListener('click', () => this.testRouterConnection());
+        }
+        if (this.routerForm) {
+            this.routerForm.addEventListener('submit', (e) => this.handleRouterSubmit(e));
+        }
+        if (this.toggleRouterPassword) {
+            this.toggleRouterPassword.addEventListener('click', () => this.togglePasswordVisibility());
+        }
+        if (this.routerModal) {
+            this.routerModal.addEventListener('click', (e) => {
+                if (e.target === this.routerModal) this.hideRouterModal();
+            });
+        }
     }
 
     showLoginModal() {
