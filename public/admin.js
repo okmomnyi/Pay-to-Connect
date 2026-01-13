@@ -64,6 +64,24 @@ class AdminPanel {
         this.administratorForm = document.getElementById('administratorForm');
         this.closeAdministratorModal = document.getElementById('closeAdministratorModal');
         this.cancelAdministrator = document.getElementById('cancelAdministrator');
+
+        // Router elements
+        this.addRouterButton = document.getElementById('addRouterButton');
+        this.routersTable = document.getElementById('routersTable');
+        this.routerModal = document.getElementById('routerModal');
+        this.routerForm = document.getElementById('routerForm');
+        this.closeRouterModal = document.getElementById('closeRouterModal');
+        this.cancelRouter = document.getElementById('cancelRouter');
+        this.routerNextButton = document.getElementById('routerNextButton');
+        this.routerPrevButton = document.getElementById('routerPrevButton');
+        this.testConnectionButton = document.getElementById('testConnectionButton');
+        this.saveRouter = document.getElementById('saveRouter');
+        this.toggleRouterPassword = document.getElementById('toggleRouterPassword');
+        
+        // Router wizard state
+        this.currentRouterStep = 1;
+        this.routerData = {};
+        this.connectionTestPassed = false;
     }
 
     bindEvents() {
@@ -105,6 +123,21 @@ class AdminPanel {
         // Close administrator modal on outside click
         this.administratorModal.addEventListener('click', (e) => {
             if (e.target === this.administratorModal) this.hideAdministratorModal();
+        });
+
+        // Router management
+        this.addRouterButton.addEventListener('click', () => this.showRouterModal());
+        this.closeRouterModal.addEventListener('click', () => this.hideRouterModal());
+        this.cancelRouter.addEventListener('click', () => this.hideRouterModal());
+        this.routerNextButton.addEventListener('click', () => this.nextRouterStep());
+        this.routerPrevButton.addEventListener('click', () => this.prevRouterStep());
+        this.testConnectionButton.addEventListener('click', () => this.testRouterConnection());
+        this.routerForm.addEventListener('submit', (e) => this.handleRouterSubmit(e));
+        this.toggleRouterPassword.addEventListener('click', () => this.togglePasswordVisibility());
+
+        // Close router modal on outside click
+        this.routerModal.addEventListener('click', (e) => {
+            if (e.target === this.routerModal) this.hideRouterModal();
         });
     }
 
@@ -612,19 +645,52 @@ class AdminPanel {
         }
     }
 
-    loadRouters() {
-        // Placeholder for router management
-        console.log('Loading routers...');
+    async loadRouters() {
+        try {
+            const response = await this.makeAuthenticatedRequest('/api/admin/routers');
+            const data = await response.json();
+
+            if (!data.success) {
+                throw new Error(data.error || 'Failed to load routers');
+            }
+
+            this.renderRouters(data.routers);
+        } catch (error) {
+            console.error('Failed to load routers:', error);
+            this.showError('Failed to load routers: ' + error.message);
+        }
     }
 
-    loadSessions() {
-        // Placeholder for session monitoring
-        console.log('Loading sessions...');
+    async loadSessions() {
+        try {
+            const response = await this.makeAuthenticatedRequest('/api/admin/sessions');
+            const data = await response.json();
+
+            if (!data.success) {
+                throw new Error(data.error || 'Failed to load sessions');
+            }
+
+            this.renderSessions(data.sessions);
+        } catch (error) {
+            console.error('Failed to load sessions:', error);
+            this.showError('Failed to load sessions: ' + error.message);
+        }
     }
 
-    loadPayments() {
-        // Placeholder for payment history
-        console.log('Loading payments...');
+    async loadPayments() {
+        try {
+            const response = await this.makeAuthenticatedRequest('/api/admin/payments');
+            const data = await response.json();
+
+            if (!data.success) {
+                throw new Error(data.error || 'Failed to load payments');
+            }
+
+            this.renderPayments(data.payments);
+        } catch (error) {
+            console.error('Failed to load payments:', error);
+            this.showError('Failed to load payments: ' + error.message);
+        }
     }
 
     async loadAdministrators() {
@@ -791,14 +857,554 @@ class AdminPanel {
         }
     }
 
-    showError(message) {
-        // Simple error notification - in production, use a proper notification system
-        alert(`Error: ${message}`);
+    // Router Management Methods
+    renderRouters(routers) {
+        this.routersTable.innerHTML = '';
+
+        if (routers.length === 0) {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td colspan="6" class="px-6 py-4 text-center text-gray-500">
+                    No routers found
+                </td>
+            `;
+            this.routersTable.appendChild(row);
+            return;
+        }
+
+        routers.forEach(router => {
+            const row = document.createElement('tr');
+            row.className = 'table-row';
+            
+            const statusClass = router.active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
+            const statusText = router.active ? 'Active' : 'Inactive';
+            
+            const connectionClass = this.getConnectionStatusClass(router.connectionStatus);
+            const connectionText = this.getConnectionStatusText(router.connectionStatus);
+            
+            row.innerHTML = `
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                    ${router.name}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    ${router.ipAddress}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${statusClass}">
+                        ${statusText}
+                    </span>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${connectionClass}">
+                        ${connectionText}
+                    </span>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    ${router.lastSyncAt ? new Date(router.lastSyncAt).toLocaleString() : 'Never'}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <button onclick="adminPanel.testConnection('${router.id}')" class="text-blue-600 hover:text-blue-900 mr-3">
+                        <i class="fas fa-plug"></i> Test
+                    </button>
+                    <button onclick="adminPanel.syncPackages('${router.id}')" class="text-green-600 hover:text-green-900 mr-3">
+                        <i class="fas fa-sync"></i> Sync
+                    </button>
+                    <button onclick="adminPanel.viewRouterStats('${router.id}')" class="text-purple-600 hover:text-purple-900 mr-3">
+                        <i class="fas fa-chart-bar"></i> Stats
+                    </button>
+                    <button onclick="adminPanel.editRouter('${router.id}')" class="text-indigo-600 hover:text-indigo-900 mr-3">
+                        <i class="fas fa-edit"></i> Edit
+                    </button>
+                    <button onclick="adminPanel.deleteRouter('${router.id}')" class="text-red-600 hover:text-red-900">
+                        <i class="fas fa-trash"></i> Delete
+                    </button>
+                </td>
+            `;
+            
+            this.routersTable.appendChild(row);
+        });
     }
 
-    showSuccess(message) {
-        // Simple success notification - in production, use a proper notification system
-        alert(`Success: ${message}`);
+    getConnectionStatusClass(status) {
+        switch (status) {
+            case 'connected': return 'bg-green-100 text-green-800';
+            case 'failed': return 'bg-red-100 text-red-800';
+            case 'timeout': return 'bg-yellow-100 text-yellow-800';
+            default: return 'bg-gray-100 text-gray-800';
+        }
+    }
+
+    getConnectionStatusText(status) {
+        switch (status) {
+            case 'connected': return 'Connected';
+            case 'failed': return 'Failed';
+            case 'timeout': return 'Timeout';
+            default: return 'Unknown';
+        }
+    }
+
+    showRouterModal() {
+        this.currentRouterStep = 1;
+        this.routerData = {};
+        this.connectionTestPassed = false;
+        this.routerForm.reset();
+        this.updateRouterWizardStep();
+        this.routerModal.classList.remove('hidden');
+    }
+
+    hideRouterModal() {
+        this.routerModal.classList.add('hidden');
+        this.currentRouterStep = 1;
+        this.routerData = {};
+        this.connectionTestPassed = false;
+    }
+
+    nextRouterStep() {
+        if (this.currentRouterStep === 1) {
+            // Validate step 1
+            const name = document.getElementById('routerName').value;
+            const ipAddress = document.getElementById('routerIpAddress').value;
+            
+            if (!name || !ipAddress) {
+                this.showError('Please fill in all required fields');
+                return;
+            }
+            
+            // Validate IP address format
+            const ipRegex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+            if (!ipRegex.test(ipAddress)) {
+                this.showError('Please enter a valid IP address');
+                return;
+            }
+            
+            this.routerData.name = name;
+            this.routerData.ipAddress = ipAddress;
+            this.currentRouterStep = 2;
+        } else if (this.currentRouterStep === 2) {
+            // Validate step 2
+            const apiUsername = document.getElementById('routerApiUsername').value;
+            const apiPassword = document.getElementById('routerApiPassword').value;
+            const apiPort = document.getElementById('routerApiPort').value;
+            
+            if (!apiUsername || !apiPassword) {
+                this.showError('Please fill in all required fields');
+                return;
+            }
+            
+            if (apiUsername === 'admin') {
+                this.showError('Do not use the admin account. Create a dedicated API user.');
+                return;
+            }
+            
+            this.routerData.apiUsername = apiUsername;
+            this.routerData.apiPassword = apiPassword;
+            this.routerData.apiPort = parseInt(apiPort) || 8729;
+            this.currentRouterStep = 3;
+            
+            // Update summary
+            this.updateRouterSummary();
+        }
+        
+        this.updateRouterWizardStep();
+    }
+
+    prevRouterStep() {
+        if (this.currentRouterStep > 1) {
+            this.currentRouterStep--;
+            this.updateRouterWizardStep();
+        }
+    }
+
+    updateRouterWizardStep() {
+        // Hide all steps
+        document.getElementById('routerStep1').classList.add('hidden');
+        document.getElementById('routerStep2').classList.add('hidden');
+        document.getElementById('routerStep3').classList.add('hidden');
+        
+        // Show current step
+        document.getElementById(`routerStep${this.currentRouterStep}`).classList.remove('hidden');
+        
+        // Update step indicators
+        for (let i = 1; i <= 3; i++) {
+            const indicator = document.getElementById(`step${i}Indicator`);
+            const progress = document.getElementById(`step${i}Progress`);
+            
+            if (i < this.currentRouterStep) {
+                // Completed step
+                indicator.className = 'flex items-center justify-center w-8 h-8 bg-green-600 text-white rounded-full text-sm font-medium';
+                indicator.innerHTML = '<i class="fas fa-check"></i>';
+                progress.style.width = '100%';
+            } else if (i === this.currentRouterStep) {
+                // Current step
+                indicator.className = 'flex items-center justify-center w-8 h-8 bg-blue-600 text-white rounded-full text-sm font-medium';
+                indicator.textContent = i;
+                progress.style.width = '50%';
+            } else {
+                // Future step
+                indicator.className = 'flex items-center justify-center w-8 h-8 bg-gray-200 text-gray-600 rounded-full text-sm font-medium';
+                indicator.textContent = i;
+                progress.style.width = '0%';
+            }
+        }
+        
+        // Update navigation buttons
+        this.routerPrevButton.classList.toggle('hidden', this.currentRouterStep === 1);
+        this.routerNextButton.classList.toggle('hidden', this.currentRouterStep === 3);
+        this.testConnectionButton.classList.toggle('hidden', this.currentRouterStep !== 3);
+        this.saveRouter.classList.toggle('hidden', this.currentRouterStep !== 3 || !this.connectionTestPassed);
+    }
+
+    updateRouterSummary() {
+        document.getElementById('summaryName').textContent = this.routerData.name || '-';
+        document.getElementById('summaryIpAddress').textContent = this.routerData.ipAddress || '-';
+        document.getElementById('summaryApiUsername').textContent = this.routerData.apiUsername || '-';
+        document.getElementById('summaryApiPort').textContent = this.routerData.apiPort || '-';
+    }
+
+    togglePasswordVisibility() {
+        const passwordInput = document.getElementById('routerApiPassword');
+        const toggleIcon = this.toggleRouterPassword.querySelector('i');
+        
+        if (passwordInput.type === 'password') {
+            passwordInput.type = 'text';
+            toggleIcon.className = 'fas fa-eye-slash text-gray-400';
+        } else {
+            passwordInput.type = 'password';
+            toggleIcon.className = 'fas fa-eye text-gray-400';
+        }
+    }
+
+    async testRouterConnection() {
+        const testButton = this.testConnectionButton;
+        const originalText = testButton.innerHTML;
+        const resultDiv = document.getElementById('connectionTestResult');
+        
+        try {
+            testButton.disabled = true;
+            testButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Testing...';
+            
+            // Create router first to get ID for testing
+            const response = await this.makeAuthenticatedRequest('/api/admin/routers', {
+                method: 'POST',
+                body: JSON.stringify(this.routerData)
+            });
+            
+            const data = await response.json();
+            
+            if (!data.success) {
+                throw new Error(data.error || 'Failed to create router');
+            }
+            
+            this.routerData.id = data.router.id;
+            const connectionTest = data.router.connectionTest;
+            
+            // Show test results
+            resultDiv.classList.remove('hidden');
+            
+            if (connectionTest.success) {
+                resultDiv.innerHTML = `
+                    <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+                        <div class="flex">
+                            <div class="flex-shrink-0">
+                                <i class="fas fa-check-circle text-green-400"></i>
+                            </div>
+                            <div class="ml-3">
+                                <h3 class="text-sm font-medium text-green-800">Connection Successful!</h3>
+                                <div class="mt-2 text-sm text-green-700">
+                                    <p>Router Identity: ${connectionTest.details?.identity || 'Unknown'}</p>
+                                    <p>Response Time: ${connectionTest.details?.responseTime || 0}ms</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                this.connectionTestPassed = true;
+            } else {
+                resultDiv.innerHTML = `
+                    <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+                        <div class="flex">
+                            <div class="flex-shrink-0">
+                                <i class="fas fa-exclamation-circle text-red-400"></i>
+                            </div>
+                            <div class="ml-3">
+                                <h3 class="text-sm font-medium text-red-800">Connection Failed</h3>
+                                <div class="mt-2 text-sm text-red-700">
+                                    <p>${connectionTest.message}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                this.connectionTestPassed = false;
+            }
+            
+            this.updateRouterWizardStep();
+            
+        } catch (error) {
+            console.error('Connection test failed:', error);
+            resultDiv.classList.remove('hidden');
+            resultDiv.innerHTML = `
+                <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <div class="flex">
+                        <div class="flex-shrink-0">
+                            <i class="fas fa-exclamation-circle text-red-400"></i>
+                        </div>
+                        <div class="ml-3">
+                            <h3 class="text-sm font-medium text-red-800">Test Failed</h3>
+                            <div class="mt-2 text-sm text-red-700">
+                                <p>${error.message}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            this.connectionTestPassed = false;
+            this.updateRouterWizardStep();
+        } finally {
+            testButton.disabled = false;
+            testButton.innerHTML = originalText;
+        }
+    }
+
+    async handleRouterSubmit(e) {
+        e.preventDefault();
+        
+        if (!this.connectionTestPassed) {
+            this.showError('Please test the connection first');
+            return;
+        }
+        
+        try {
+            this.hideRouterModal();
+            this.loadRouters();
+            this.showSuccess('Router added successfully');
+        } catch (error) {
+            console.error('Failed to save router:', error);
+            this.showError(error.message);
+        }
+    }
+
+    async testConnection(routerId) {
+        try {
+            this.showInfo('Testing router connection...');
+            
+            const response = await this.makeAuthenticatedRequest(`/api/admin/routers/${routerId}/test-connection`, {
+                method: 'POST'
+            });
+            
+            const data = await response.json();
+            
+            if (data.success && data.connectionTest.success) {
+                this.showSuccess(`Connection successful! Identity: ${data.connectionTest.details?.identity || 'Unknown'}`);
+            } else {
+                this.showError(`Connection failed: ${data.connectionTest?.message || data.error}`);
+            }
+            
+            this.loadRouters(); // Refresh to show updated connection status
+        } catch (error) {
+            console.error('Failed to test connection:', error);
+            this.showError('Failed to test connection: ' + error.message);
+        }
+    }
+
+    async syncPackages(routerId) {
+        try {
+            this.showInfo('Syncing packages to router...');
+            
+            const response = await this.makeAuthenticatedRequest(`/api/admin/routers/${routerId}/sync-packages`, {
+                method: 'POST'
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                this.showSuccess(`Packages synced successfully! ${data.syncResult.syncedCount || 0} packages synced.`);
+            } else {
+                this.showError(`Sync failed: ${data.error}`);
+            }
+            
+            this.loadRouters(); // Refresh to show updated sync status
+        } catch (error) {
+            console.error('Failed to sync packages:', error);
+            this.showError('Failed to sync packages: ' + error.message);
+        }
+    }
+
+    async viewRouterStats(routerId) {
+        try {
+            const response = await this.makeAuthenticatedRequest(`/api/admin/routers/${routerId}/stats`);
+            const data = await response.json();
+            
+            if (data.success) {
+                const stats = data.stats;
+                alert(`Router Statistics:\n\nUptime: ${stats.uptime}\nCPU Load: ${stats.cpuLoad}\nFree Memory: ${stats.freeMemory}\nActive Users: ${stats.activeUsers}`);
+            } else {
+                this.showError(`Failed to get stats: ${data.error}`);
+            }
+        } catch (error) {
+            console.error('Failed to get router stats:', error);
+            this.showError('Failed to get router stats: ' + error.message);
+        }
+    }
+
+    async editRouter(routerId) {
+        this.showInfo('Router editing not yet implemented');
+    }
+
+    async deleteRouter(routerId) {
+        if (!confirm('Are you sure you want to delete this router? This action cannot be undone.')) {
+            return;
+        }
+
+        try {
+            const response = await this.makeAuthenticatedRequest(`/api/admin/routers/${routerId}`, {
+                method: 'DELETE'
+            });
+
+            const data = await response.json();
+
+            if (!data.success) {
+                throw new Error(data.error || 'Failed to delete router');
+            }
+
+            this.loadRouters();
+            this.showSuccess('Router deleted successfully');
+
+        } catch (error) {
+            console.error('Failed to delete router:', error);
+            this.showError(error.message);
+        }
+    }
+
+    // Session and Payment rendering methods
+    renderSessions(sessions) {
+        const container = document.getElementById('sessionsTable');
+        if (!container) return;
+
+        container.innerHTML = '';
+
+        if (sessions.length === 0) {
+            container.innerHTML = '<tr><td colspan="6" class="px-6 py-4 text-center text-gray-500">No sessions found</td></tr>';
+            return;
+        }
+
+        sessions.forEach(session => {
+            const row = document.createElement('tr');
+            row.className = 'table-row';
+
+            const statusClass = session.active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800';
+            const statusText = session.active ? 'Active' : 'Expired';
+
+            row.innerHTML = `
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    ${session.macAddress}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    ${session.packageName}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    ${session.routerName || 'Unknown'}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${statusClass}">
+                        ${statusText}
+                    </span>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    ${new Date(session.startTime).toLocaleString()}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    ${session.endTime ? new Date(session.endTime).toLocaleString() : 'N/A'}
+                </td>
+            `;
+
+            container.appendChild(row);
+        });
+    }
+
+    renderPayments(payments) {
+        const container = document.getElementById('paymentsTable');
+        if (!container) return;
+
+        container.innerHTML = '';
+
+        if (payments.length === 0) {
+            container.innerHTML = '<tr><td colspan="6" class="px-6 py-4 text-center text-gray-500">No payments found</td></tr>';
+            return;
+        }
+
+        payments.forEach(payment => {
+            const row = document.createElement('tr');
+            row.className = 'table-row';
+
+            const statusClass = this.getPaymentStatusClass(payment.status);
+            const statusText = payment.status.charAt(0).toUpperCase() + payment.status.slice(1);
+
+            row.innerHTML = `
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    ${payment.phone}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    KES ${payment.amount.toFixed(2)}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    ${payment.mpesaReceipt || 'N/A'}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${statusClass}">
+                        ${statusText}
+                    </span>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    ${new Date(payment.createdAt).toLocaleString()}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    ${payment.status === 'pending' ? 
+                        `<button onclick="adminPanel.approvePayment('${payment.id}')" class="text-green-600 hover:text-green-900">
+                            <i class="fas fa-check"></i> Approve
+                        </button>` : 
+                        '<span class="text-gray-400">No actions</span>'
+                    }
+                </td>
+            `;
+
+            container.appendChild(row);
+        });
+    }
+
+    getPaymentStatusClass(status) {
+        switch (status) {
+            case 'success': return 'bg-green-100 text-green-800';
+            case 'failed': return 'bg-red-100 text-red-800';
+            case 'pending': return 'bg-yellow-100 text-yellow-800';
+            case 'cancelled': return 'bg-gray-100 text-gray-800';
+            default: return 'bg-gray-100 text-gray-800';
+        }
+    }
+
+    async approvePayment(paymentId) {
+        if (!confirm('Are you sure you want to approve this payment?')) {
+            return;
+        }
+
+        try {
+            const response = await this.makeAuthenticatedRequest(`/api/admin/payments/${paymentId}/approve`, {
+                method: 'POST'
+            });
+
+            const data = await response.json();
+
+            if (!data.success) {
+                throw new Error(data.error || 'Failed to approve payment');
+            }
+
+            this.loadPayments();
+            this.showSuccess('Payment approved successfully');
+
+        } catch (error) {
+            console.error('Failed to approve payment:', error);
+            this.showError(error.message);
+        }
     }
 }
 
