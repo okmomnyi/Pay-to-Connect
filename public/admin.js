@@ -710,43 +710,53 @@ class AdminPanel {
     }
 
     renderAdministrators(administrators) {
-        const container = document.getElementById('administratorsTable');
-        if (!container) return;
-
+        const container = this.administratorsTable;
+        if (!container) {
+            console.error('Administrators table container not found');
+            return;
+        }
+        
         container.innerHTML = '';
 
-        if (administrators.length === 0) {
-            container.innerHTML = '<tr><td colspan="5" class="px-6 py-4 text-center text-gray-500">No administrators found</td></tr>';
+        if (!administrators || administrators.length === 0) {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td colspan="5" class="px-6 py-4 text-center text-gray-500">
+                    No administrators found
+                </td>
+            `;
+            container.appendChild(row);
             return;
         }
 
         administrators.forEach(admin => {
             const row = document.createElement('tr');
-            row.className = 'table-row';
-
+            row.className = 'table-row hover:bg-gray-50';
+            
             const statusClass = admin.active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
             const statusText = admin.active ? 'Active' : 'Inactive';
-
+            const createdDate = admin.createdAt ? new Date(admin.createdAt).toLocaleDateString() : 'N/A';
+            
             row.innerHTML = `
                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                    ${admin.username}
+                    ${this.escapeHtml(admin.username || 'N/A')}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    ${admin.email}
+                    ${this.escapeHtml(admin.email || 'N/A')}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap">
                     <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${statusClass}">
                         ${statusText}
                     </span>
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    ${new Date(admin.created_at).toLocaleDateString()}
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    ${createdDate}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <button onclick="adminPanel.editAdministrator('${admin.id}')" class="text-indigo-600 hover:text-indigo-900 mr-3">
+                    <button class="text-blue-600 hover:text-blue-900 mr-3 admin-edit-btn" data-admin-id="${admin.id}">
                         <i class="fas fa-edit"></i> Edit
                     </button>
-                    <button onclick="adminPanel.deleteAdministrator('${admin.id}')" class="text-red-600 hover:text-red-900">
+                    <button class="text-red-600 hover:text-red-900 admin-delete-btn" data-admin-id="${admin.id}">
                         <i class="fas fa-trash"></i> Delete
                     </button>
                 </td>
@@ -754,16 +764,47 @@ class AdminPanel {
 
             container.appendChild(row);
         });
+        
+        // Add event listeners for edit and delete buttons
+        container.querySelectorAll('.admin-edit-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                const adminId = btn.getAttribute('data-admin-id');
+                this.editAdministrator(adminId);
+            });
+        });
+        
+        container.querySelectorAll('.admin-delete-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                const adminId = btn.getAttribute('data-admin-id');
+                this.deleteAdministrator(adminId);
+            });
+        });
     }
 
     async createAdministrator(username, email, password) {
         try {
+            console.log('Creating administrator with:', { username, email, password: '***' });
+            
             const response = await this.makeAuthenticatedRequest('/api/admin/administrators', {
                 method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
                 body: JSON.stringify({ username, email, password })
             });
 
+            console.log('Response status:', response.status);
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.log('Error response:', errorText);
+                throw new Error(`HTTP ${response.status}: ${errorText}`);
+            }
+
             const data = await response.json();
+            console.log('Response data:', data);
 
             if (!data.success) {
                 throw new Error(data.error || 'Failed to create administrator');
@@ -780,35 +821,93 @@ class AdminPanel {
     }
 
     async editAdministrator(adminId) {
-        const newEmail = prompt('Enter new email (leave blank to skip):');
-        const newPassword = prompt('Enter new password (leave blank to skip):');
-
-        if (!newEmail && !newPassword) {
-            return;
-        }
-
-        try {
-            const updates = {};
-            if (newEmail) updates.email = newEmail;
-            if (newPassword) updates.password = newPassword;
-
-            const response = await this.makeAuthenticatedRequest(`/api/admin/administrators/${adminId}`, {
-                method: 'PUT',
-                body: JSON.stringify(updates)
-            });
-
-            const data = await response.json();
-
-            if (!data.success) {
-                throw new Error(data.error || 'Failed to update administrator');
+        // Create a proper modal for editing instead of using prompt
+        const modal = document.createElement('div');
+        modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+        modal.innerHTML = `
+            <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-bold">Edit Administrator</h3>
+                    <button class="text-gray-500 hover:text-gray-700 close-edit-modal">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <form class="edit-admin-form">
+                    <div class="mb-4">
+                        <label class="block text-gray-700 text-sm font-bold mb-2">New Email (optional)</label>
+                        <input type="email" class="edit-email w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Leave blank to keep current">
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-gray-700 text-sm font-bold mb-2">New Password (optional)</label>
+                        <input type="password" class="edit-password w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Leave blank to keep current" minlength="8">
+                    </div>
+                    <div class="flex gap-4">
+                        <button type="button" class="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg close-edit-modal">Cancel</button>
+                        <button type="submit" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Update</button>
+                    </div>
+                </form>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        // Handle form submission
+        modal.querySelector('.edit-admin-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const newEmail = modal.querySelector('.edit-email').value.trim();
+            const newPassword = modal.querySelector('.edit-password').value;
+            
+            if (!newEmail && !newPassword) {
+                this.showError('Please provide at least one field to update');
+                return;
             }
-
-            this.showSuccess('Administrator updated successfully');
-            this.loadAdministrators();
-        } catch (error) {
-            console.error('Failed to update administrator:', error);
-            this.showError(error.message);
-        }
+            
+            try {
+                const updates = {};
+                if (newEmail) updates.email = newEmail;
+                if (newPassword) {
+                    if (newPassword.length < 8) {
+                        this.showError('Password must be at least 8 characters');
+                        return;
+                    }
+                    updates.password = newPassword;
+                }
+                
+                const response = await this.makeAuthenticatedRequest(`/api/admin/administrators/${adminId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(updates)
+                });
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorText}`);
+                }
+                
+                const data = await response.json();
+                
+                if (!data.success) {
+                    throw new Error(data.error || 'Failed to update administrator');
+                }
+                
+                this.showSuccess('Administrator updated successfully');
+                this.loadAdministrators();
+                document.body.removeChild(modal);
+            } catch (error) {
+                console.error('Failed to update administrator:', error);
+                this.showError(error.message);
+            }
+        });
+        
+        // Handle modal close
+        modal.querySelectorAll('.close-edit-modal').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.body.removeChild(modal);
+            });
+        });
     }
 
     async deleteAdministrator(adminId) {
@@ -847,9 +946,23 @@ class AdminPanel {
     async handleAdministratorSubmit(e) {
         e.preventDefault();
 
-        const username = document.getElementById('adminUsername').value;
-        const email = document.getElementById('adminEmail').value;
+        const username = document.getElementById('adminUsername').value.trim();
+        const email = document.getElementById('adminEmail').value.trim();
         const password = document.getElementById('adminPassword').value;
+
+        // Client-side validation
+        if (!username) {
+            this.showError('Username is required');
+            return;
+        }
+        if (!email) {
+            this.showError('Email is required');
+            return;
+        }
+        if (!password || password.length < 8) {
+            this.showError('Password must be at least 8 characters');
+            return;
+        }
 
         const success = await this.createAdministrator(username, email, password);
         if (success) {
@@ -884,10 +997,10 @@ class AdminPanel {
             
             row.innerHTML = `
                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                    ${router.name}
+                    ${this.escapeHtml(router.name)}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    ${router.ipAddress}
+                    ${this.escapeHtml(router.ipAddress)}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap">
                     <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${statusClass}">
@@ -925,6 +1038,13 @@ class AdminPanel {
         });
     }
 
+    escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
     getConnectionStatusClass(status) {
         switch (status) {
             case 'connected': return 'bg-green-100 text-green-800';
@@ -945,15 +1065,24 @@ class AdminPanel {
 
     showRouterModal() {
         this.currentRouterStep = 1;
-        this.routerData = {};
         this.connectionTestPassed = false;
-        this.routerForm.reset();
+        this.routerData = {};
+        
+        if (this.routerForm) {
+            this.routerForm.reset();
+        }
+        
+        if (this.routerModal) {
+            this.routerModal.classList.remove('hidden');
+        }
+        
         this.updateRouterWizardStep();
-        this.routerModal.classList.remove('hidden');
     }
 
     hideRouterModal() {
-        this.routerModal.classList.add('hidden');
+        if (this.routerModal) {
+            this.routerModal.classList.add('hidden');
+        }
         this.currentRouterStep = 1;
         this.routerData = {};
         this.connectionTestPassed = false;
@@ -1017,41 +1146,50 @@ class AdminPanel {
 
     updateRouterWizardStep() {
         // Hide all steps
-        document.getElementById('routerStep1').classList.add('hidden');
-        document.getElementById('routerStep2').classList.add('hidden');
-        document.getElementById('routerStep3').classList.add('hidden');
+        const step1 = document.getElementById('routerStep1');
+        const step2 = document.getElementById('routerStep2');
+        const step3 = document.getElementById('routerStep3');
+        
+        if (step1) step1.classList.add('hidden');
+        if (step2) step2.classList.add('hidden');
+        if (step3) step3.classList.add('hidden');
         
         // Show current step
-        document.getElementById(`routerStep${this.currentRouterStep}`).classList.remove('hidden');
+        const currentStep = document.getElementById(`routerStep${this.currentRouterStep}`);
+        if (currentStep) {
+            currentStep.classList.remove('hidden');
+        }
         
         // Update step indicators
         for (let i = 1; i <= 3; i++) {
             const indicator = document.getElementById(`step${i}Indicator`);
             const progress = document.getElementById(`step${i}Progress`);
             
-            if (i < this.currentRouterStep) {
-                // Completed step
-                indicator.className = 'flex items-center justify-center w-8 h-8 bg-green-600 text-white rounded-full text-sm font-medium';
-                indicator.innerHTML = '<i class="fas fa-check"></i>';
-                progress.style.width = '100%';
-            } else if (i === this.currentRouterStep) {
-                // Current step
-                indicator.className = 'flex items-center justify-center w-8 h-8 bg-blue-600 text-white rounded-full text-sm font-medium';
-                indicator.textContent = i;
-                progress.style.width = '50%';
-            } else {
-                // Future step
-                indicator.className = 'flex items-center justify-center w-8 h-8 bg-gray-200 text-gray-600 rounded-full text-sm font-medium';
-                indicator.textContent = i;
-                progress.style.width = '0%';
+            if (indicator && progress) {
+                if (i < this.currentRouterStep) {
+                    // Completed step
+                    indicator.className = 'flex items-center justify-center w-8 h-8 bg-green-600 text-white rounded-full text-sm font-medium';
+                    indicator.innerHTML = '<i class="fas fa-check"></i>';
+                    progress.style.width = '100%';
+                } else if (i === this.currentRouterStep) {
+                    // Current step
+                    indicator.className = 'flex items-center justify-center w-8 h-8 bg-blue-600 text-white rounded-full text-sm font-medium';
+                    indicator.textContent = i;
+                    progress.style.width = '50%';
+                } else {
+                    // Future step
+                    indicator.className = 'flex items-center justify-center w-8 h-8 bg-gray-200 text-gray-600 rounded-full text-sm font-medium';
+                    indicator.textContent = i;
+                    progress.style.width = '0%';
+                }
             }
         }
         
         // Update navigation buttons
-        this.routerPrevButton.classList.toggle('hidden', this.currentRouterStep === 1);
-        this.routerNextButton.classList.toggle('hidden', this.currentRouterStep === 3);
-        this.testConnectionButton.classList.toggle('hidden', this.currentRouterStep !== 3);
-        this.saveRouter.classList.toggle('hidden', this.currentRouterStep !== 3 || !this.connectionTestPassed);
+        if (this.routerPrevButton) this.routerPrevButton.classList.toggle('hidden', this.currentRouterStep === 1);
+        if (this.routerNextButton) this.routerNextButton.classList.toggle('hidden', this.currentRouterStep === 3);
+        if (this.testConnectionButton) this.testConnectionButton.classList.toggle('hidden', this.currentRouterStep !== 3);
+        if (this.saveRouter) this.saveRouter.classList.toggle('hidden', this.currentRouterStep !== 3 || !this.connectionTestPassed);
     }
 
     updateRouterSummary() {
