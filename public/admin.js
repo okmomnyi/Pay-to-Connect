@@ -71,28 +71,34 @@ class AdminPanel {
         this.routerModal = document.getElementById('routerModal');
         this.routerForm = document.getElementById('routerForm');
         this.closeRouterModal = document.getElementById('closeRouterModal');
-        this.cancelRouter = document.getElementById('cancelRouter');
-        this.routerNextButton = document.getElementById('routerNextButton');
+        
+        // Router wizard elements
         this.routerPrevButton = document.getElementById('routerPrevButton');
+        this.routerNextButton = document.getElementById('routerNextButton');
         this.testConnectionButton = document.getElementById('testConnectionButton');
         this.saveRouter = document.getElementById('saveRouter');
         this.toggleRouterPassword = document.getElementById('toggleRouterPassword');
-        
-        // Router wizard state
-        this.currentRouterStep = 1;
-        this.routerData = {};
-        this.connectionTestPassed = false;
+
+        // Sessions and payments
+        this.sessionsTable = document.getElementById('sessionsTable');
+        this.paymentsTable = document.getElementById('paymentsTable');
     }
 
     bindEvents() {
         // Login form
-        this.loginForm.addEventListener('submit', (e) => this.handleLogin(e));
+        if (this.loginForm) {
+            this.loginForm.addEventListener('submit', (e) => this.handleLogin(e));
+        }
 
-        // Logout
-        this.logoutButton.addEventListener('click', () => this.handleLogout());
+        // Logout button
+        if (this.logoutButton) {
+            this.logoutButton.addEventListener('click', () => this.handleLogout());
+        }
 
         // Sidebar toggle
-        this.sidebarToggle.addEventListener('click', () => this.toggleSidebar());
+        if (this.sidebarToggle) {
+            this.sidebarToggle.addEventListener('click', () => this.toggleSidebar());
+        }
 
         // Navigation
         this.navLinks.forEach(link => {
@@ -104,41 +110,70 @@ class AdminPanel {
         });
 
         // Package management
-        this.addPackageButton.addEventListener('click', () => this.showPackageModal());
-        this.closePackageModal.addEventListener('click', () => this.hidePackageModal());
-        this.cancelPackage.addEventListener('click', () => this.hidePackageModal());
-        this.packageForm.addEventListener('submit', (e) => this.handlePackageSubmit(e));
-
-        // Close modal on outside click
-        this.packageModal.addEventListener('click', (e) => {
-            if (e.target === this.packageModal) this.hidePackageModal();
-        });
+        if (this.addPackageButton) {
+            this.addPackageButton.addEventListener('click', () => this.showPackageModal());
+        }
+        if (this.closePackageModal) {
+            this.closePackageModal.addEventListener('click', () => this.hidePackageModal());
+        }
+        if (this.cancelPackage) {
+            this.cancelPackage.addEventListener('click', () => this.hidePackageModal());
+        }
+        if (this.packageForm) {
+            this.packageForm.addEventListener('submit', (e) => this.handlePackageSubmit(e));
+        }
+        if (this.packageModal) {
+            this.packageModal.addEventListener('click', (e) => {
+                if (e.target === this.packageModal) this.hidePackageModal();
+            });
+        }
 
         // Administrator management
-        this.addAdministratorButton.addEventListener('click', () => this.showAdministratorModal());
-        this.closeAdministratorModal.addEventListener('click', () => this.hideAdministratorModal());
-        this.cancelAdministrator.addEventListener('click', () => this.hideAdministratorModal());
-        this.administratorForm.addEventListener('submit', (e) => this.handleAdministratorSubmit(e));
-
-        // Close administrator modal on outside click
-        this.administratorModal.addEventListener('click', (e) => {
-            if (e.target === this.administratorModal) this.hideAdministratorModal();
-        });
+        if (this.addAdministratorButton) {
+            this.addAdministratorButton.addEventListener('click', () => this.showAdministratorModal());
+        }
+        if (this.closeAdministratorModal) {
+            this.closeAdministratorModal.addEventListener('click', () => this.hideAdministratorModal());
+        }
+        if (this.cancelAdministrator) {
+            this.cancelAdministrator.addEventListener('click', () => this.hideAdministratorModal());
+        }
+        if (this.administratorForm) {
+            this.administratorForm.addEventListener('submit', (e) => this.handleAdministratorSubmit(e));
+        }
+        if (this.administratorModal) {
+            this.administratorModal.addEventListener('click', (e) => {
+                if (e.target === this.administratorModal) this.hideAdministratorModal();
+            });
+        }
 
         // Router management
-        this.addRouterButton.addEventListener('click', () => this.showRouterModal());
-        this.closeRouterModal.addEventListener('click', () => this.hideRouterModal());
-        this.cancelRouter.addEventListener('click', () => this.hideRouterModal());
-        this.routerNextButton.addEventListener('click', () => this.nextRouterStep());
-        this.routerPrevButton.addEventListener('click', () => this.prevRouterStep());
-        this.testConnectionButton.addEventListener('click', () => this.testRouterConnection());
-        this.routerForm.addEventListener('submit', (e) => this.handleRouterSubmit(e));
-        this.toggleRouterPassword.addEventListener('click', () => this.togglePasswordVisibility());
-
-        // Close router modal on outside click
-        this.routerModal.addEventListener('click', (e) => {
-            if (e.target === this.routerModal) this.hideRouterModal();
-        });
+        if (this.addRouterButton) {
+            this.addRouterButton.addEventListener('click', () => this.showRouterModal());
+        }
+        if (this.closeRouterModal) {
+            this.closeRouterModal.addEventListener('click', () => this.hideRouterModal());
+        }
+        if (this.routerNextButton) {
+            this.routerNextButton.addEventListener('click', () => this.nextRouterStep());
+        }
+        if (this.routerPrevButton) {
+            this.routerPrevButton.addEventListener('click', () => this.prevRouterStep());
+        }
+        if (this.testConnectionButton) {
+            this.testConnectionButton.addEventListener('click', () => this.testRouterConnection());
+        }
+        if (this.routerForm) {
+            this.routerForm.addEventListener('submit', (e) => this.handleRouterSubmit(e));
+        }
+        if (this.toggleRouterPassword) {
+            this.toggleRouterPassword.addEventListener('click', () => this.togglePasswordVisibility());
+        }
+        if (this.routerModal) {
+            this.routerModal.addEventListener('click', (e) => {
+                if (e.target === this.routerModal) this.hideRouterModal();
+            });
+        }
     }
 
     showLoginModal() {
@@ -366,43 +401,39 @@ class AdminPanel {
         return response;
     }
 
+    // Dashboard Methods
     async loadDashboard() {
         try {
             const response = await this.makeAuthenticatedRequest('/api/admin/dashboard');
             const data = await response.json();
 
-            if (!data.success) {
-                throw new Error(data.error || 'Failed to load dashboard');
+            if (data.success) {
+                this.updateDashboardStats(data.stats);
+                this.renderRecentSessions(data.recentSessions || []);
             }
-
-            // Update statistics
-            this.activeSessions.textContent = data.stats.activeSessions;
-            this.todayRevenue.textContent = `KES ${data.stats.todayPayments.amount.toFixed(2)}`;
-            this.totalDevices.textContent = data.stats.totalDevices;
-            this.totalRevenue.textContent = `KES ${data.stats.totalRevenue.toFixed(2)}`;
-
-            // Update recent sessions table
-            this.renderRecentSessions(data.recentSessions);
-
         } catch (error) {
             console.error('Failed to load dashboard:', error);
-            // Show mock data if API fails
-            this.activeSessions.textContent = '0';
-            this.todayRevenue.textContent = 'KES 0.00';
-            this.totalDevices.textContent = '5';
-            this.totalRevenue.textContent = 'KES 0.00';
-            this.renderRecentSessions([]);
+            this.showError('Failed to load dashboard data');
         }
     }
 
+    updateDashboardStats(stats) {
+        if (this.activeSessions) this.activeSessions.textContent = stats.activeSessions || '0';
+        if (this.todayRevenue) this.todayRevenue.textContent = `KES ${stats.todayRevenue || '0.00'}`;
+        if (this.totalDevices) this.totalDevices.textContent = stats.totalDevices || '0';
+        if (this.totalRevenue) this.totalRevenue.textContent = `KES ${stats.totalRevenue || '0.00'}`;
+    }
+
     renderRecentSessions(sessions) {
+        if (!this.recentSessionsTable) return;
+
         this.recentSessionsTable.innerHTML = '';
 
         if (sessions.length === 0) {
             const row = document.createElement('tr');
             row.innerHTML = `
                 <td colspan="5" class="px-6 py-4 text-center text-gray-500">
-                    No recent sessions found
+                    No recent sessions
                 </td>
             `;
             this.recentSessionsTable.appendChild(row);
@@ -413,26 +444,25 @@ class AdminPanel {
             const row = document.createElement('tr');
             row.className = 'table-row';
             
-            const statusClass = session.active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800';
-            const statusText = session.active ? 'Active' : 'Expired';
+            const statusClass = session.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800';
             
             row.innerHTML = `
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    ${session.macAddress}
+                    ${this.escapeHtml(session.deviceMac || 'Unknown')}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    ${session.packageName}
+                    ${this.escapeHtml(session.packageName || 'N/A')}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    KES ${session.price.toFixed(2)}
+                    KES ${session.amount || '0.00'}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap">
                     <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${statusClass}">
-                        ${statusText}
+                        ${session.status || 'Unknown'}
                     </span>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    ${new Date(session.startTime).toLocaleString()}
+                    ${session.createdAt ? new Date(session.createdAt).toLocaleString() : 'N/A'}
                 </td>
             `;
             
@@ -440,24 +470,26 @@ class AdminPanel {
         });
     }
 
+    // Package Management Methods
     async loadPackages() {
         try {
             const response = await this.makeAuthenticatedRequest('/api/admin/packages');
             const data = await response.json();
 
-            if (!data.success) {
+            if (data.success) {
+                this.renderPackages(data.packages || []);
+            } else {
                 throw new Error(data.error || 'Failed to load packages');
             }
-
-            this.renderPackages(data.packages);
-
         } catch (error) {
             console.error('Failed to load packages:', error);
-            this.showError('Failed to load packages');
+            this.showError('Failed to load packages: ' + error.message);
         }
     }
 
     renderPackages(packages) {
+        if (!this.packagesTable) return;
+
         this.packagesTable.innerHTML = '';
 
         if (packages.length === 0) {
@@ -473,22 +505,20 @@ class AdminPanel {
 
         packages.forEach(pkg => {
             const row = document.createElement('tr');
-            row.className = 'table-row';
+            row.className = 'table-row hover:bg-gray-50';
             
             const statusClass = pkg.active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
             const statusText = pkg.active ? 'Active' : 'Inactive';
             
-            const durationDisplay = this.formatDuration(pkg.durationMinutes);
-            
             row.innerHTML = `
                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                    ${pkg.name}
+                    ${this.escapeHtml(pkg.name)}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    ${durationDisplay}
+                    ${this.formatDuration(pkg.durationMinutes)}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    ${pkg.priceKes.toFixed(2)}
+                    KES ${pkg.priceKes}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap">
                     <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${statusClass}">
@@ -496,19 +526,42 @@ class AdminPanel {
                     </span>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <button onclick="adminPanel.editPackage('${pkg.id}')" class="text-indigo-600 hover:text-indigo-900 mr-3">
+                    <button class="text-blue-600 hover:text-blue-900 mr-3 edit-package-btn" data-package-id="${pkg.id}">
                         <i class="fas fa-edit"></i> Edit
                     </button>
-                    <button onclick="adminPanel.togglePackageStatus('${pkg.id}', ${!pkg.active})" class="text-${pkg.active ? 'red' : 'green'}-600 hover:text-${pkg.active ? 'red' : 'green'}-900 mr-3">
+                    <button class="text-${pkg.active ? 'yellow' : 'green'}-600 hover:text-${pkg.active ? 'yellow' : 'green'}-900 mr-3 toggle-package-btn" data-package-id="${pkg.id}" data-active="${pkg.active}">
                         <i class="fas fa-${pkg.active ? 'ban' : 'check'}"></i> ${pkg.active ? 'Disable' : 'Enable'}
                     </button>
-                    <button onclick="adminPanel.deletePackage('${pkg.id}')" class="text-red-600 hover:text-red-900">
+                    <button class="text-red-600 hover:text-red-900 delete-package-btn" data-package-id="${pkg.id}">
                         <i class="fas fa-trash"></i> Delete
                     </button>
                 </td>
             `;
             
             this.packagesTable.appendChild(row);
+        });
+
+        // Add event listeners for package actions
+        this.packagesTable.querySelectorAll('.edit-package-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const packageId = btn.getAttribute('data-package-id');
+                this.editPackage(packageId);
+            });
+        });
+
+        this.packagesTable.querySelectorAll('.toggle-package-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const packageId = btn.getAttribute('data-package-id');
+                const isActive = btn.getAttribute('data-active') === 'true';
+                this.togglePackageStatus(packageId, !isActive);
+            });
+        });
+
+        this.packagesTable.querySelectorAll('.delete-package-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const packageId = btn.getAttribute('data-package-id');
+                this.deletePackage(packageId);
+            });
         });
     }
 
@@ -533,23 +586,29 @@ class AdminPanel {
     }
 
     showPackageModal(packageData = null) {
+        if (!this.packageModal) return;
+
         this.editingPackageId = packageData ? packageData.id : null;
         
         if (packageData) {
             this.packageModalTitle.textContent = 'Edit Package';
-            document.getElementById('packageName').value = packageData.name;
-            document.getElementById('packageDuration').value = packageData.durationMinutes;
-            document.getElementById('packagePrice').value = packageData.priceKes;
+            document.getElementById('packageName').value = packageData.name || '';
+            document.getElementById('packageDescription').value = packageData.description || '';
+            document.getElementById('packageType').value = packageData.packageType || 'time';
+            document.getElementById('packageDuration').value = packageData.durationMinutes || '';
+            document.getElementById('packagePrice').value = packageData.priceKes || '';
         } else {
             this.packageModalTitle.textContent = 'Add Package';
-            this.packageForm.reset();
+            if (this.packageForm) this.packageForm.reset();
         }
         
         this.packageModal.classList.remove('hidden');
     }
 
     hidePackageModal() {
-        this.packageModal.classList.add('hidden');
+        if (this.packageModal) {
+            this.packageModal.classList.add('hidden');
+        }
         this.editingPackageId = null;
     }
 
@@ -557,10 +616,26 @@ class AdminPanel {
         e.preventDefault();
         
         const formData = {
-            name: document.getElementById('packageName').value,
+            name: document.getElementById('packageName').value.trim(),
+            description: document.getElementById('packageDescription').value.trim(),
+            packageType: document.getElementById('packageType').value,
             durationMinutes: parseInt(document.getElementById('packageDuration').value),
             priceKes: parseFloat(document.getElementById('packagePrice').value)
         };
+
+        // Validation
+        if (!formData.name) {
+            this.showError('Package name is required');
+            return;
+        }
+        if (!formData.durationMinutes || formData.durationMinutes < 1) {
+            this.showError('Duration must be at least 1 minute');
+            return;
+        }
+        if (!formData.priceKes || formData.priceKes < 0) {
+            this.showError('Price must be 0 or greater');
+            return;
+        }
 
         try {
             const url = this.editingPackageId 
@@ -591,9 +666,19 @@ class AdminPanel {
     }
 
     async editPackage(packageId) {
-        // Find package data and show modal
-        // In a real implementation, you might fetch the specific package data
-        this.showPackageModal({ id: packageId });
+        try {
+            const response = await this.makeAuthenticatedRequest(`/api/admin/packages/${packageId}`);
+            const data = await response.json();
+
+            if (data.success) {
+                this.showPackageModal(data.package);
+            } else {
+                throw new Error(data.error || 'Failed to load package');
+            }
+        } catch (error) {
+            console.error('Failed to load package:', error);
+            this.showError(error.message);
+        }
     }
 
     async togglePackageStatus(packageId, active) {
@@ -623,8 +708,6 @@ class AdminPanel {
             return;
         }
 
-        this.showInfo('Deleting package...');
-
         try {
             const response = await this.makeAuthenticatedRequest(`/api/admin/packages/${packageId}`, {
                 method: 'DELETE'
@@ -645,118 +728,137 @@ class AdminPanel {
         }
     }
 
-    async loadRouters() {
-        try {
-            const response = await this.makeAuthenticatedRequest('/api/admin/routers');
-            const data = await response.json();
-
-            if (!data.success) {
-                throw new Error(data.error || 'Failed to load routers');
-            }
-
-            this.renderRouters(data.routers);
-        } catch (error) {
-            console.error('Failed to load routers:', error);
-            this.showError('Failed to load routers: ' + error.message);
-        }
+    // Utility method to escape HTML
+    escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
 
-    async loadSessions() {
-        try {
-            const response = await this.makeAuthenticatedRequest('/api/admin/sessions');
-            const data = await response.json();
-
-            if (!data.success) {
-                throw new Error(data.error || 'Failed to load sessions');
-            }
-
-            this.renderSessions(data.sessions);
-        } catch (error) {
-            console.error('Failed to load sessions:', error);
-            this.showError('Failed to load sessions: ' + error.message);
-        }
-    }
-
-    async loadPayments() {
-        try {
-            const response = await this.makeAuthenticatedRequest('/api/admin/payments');
-            const data = await response.json();
-
-            if (!data.success) {
-                throw new Error(data.error || 'Failed to load payments');
-            }
-
-            this.renderPayments(data.payments);
-        } catch (error) {
-            console.error('Failed to load payments:', error);
-            this.showError('Failed to load payments: ' + error.message);
-        }
-    }
-
+    // Administrator Management Methods
     async loadAdministrators() {
         try {
             const response = await this.makeAuthenticatedRequest('/api/admin/administrators');
             const data = await response.json();
 
-            if (!data.success) {
+            if (data.success) {
+                this.renderAdministrators(data.administrators || []);
+            } else {
                 throw new Error(data.error || 'Failed to load administrators');
             }
-
-            this.renderAdministrators(data.administrators);
         } catch (error) {
             console.error('Failed to load administrators:', error);
-            this.showError('Failed to load administrators');
+            this.showError('Failed to load administrators: ' + error.message);
         }
     }
 
     renderAdministrators(administrators) {
-        const container = document.getElementById('administratorsTable');
-        if (!container) return;
+        if (!this.administratorsTable) return;
 
-        container.innerHTML = '';
+        this.administratorsTable.innerHTML = '';
 
         if (administrators.length === 0) {
-            container.innerHTML = '<tr><td colspan="5" class="px-6 py-4 text-center text-gray-500">No administrators found</td></tr>';
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td colspan="5" class="px-6 py-4 text-center text-gray-500">
+                    No administrators found
+                </td>
+            `;
+            this.administratorsTable.appendChild(row);
             return;
         }
 
         administrators.forEach(admin => {
             const row = document.createElement('tr');
-            row.className = 'table-row';
-
+            row.className = 'table-row hover:bg-gray-50';
+            
             const statusClass = admin.active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
             const statusText = admin.active ? 'Active' : 'Inactive';
-
+            const createdDate = admin.createdAt ? new Date(admin.createdAt).toLocaleDateString() : 'N/A';
+            
             row.innerHTML = `
                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                    ${admin.username}
+                    ${this.escapeHtml(admin.username || 'N/A')}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    ${admin.email}
+                    ${this.escapeHtml(admin.email || 'N/A')}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap">
                     <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${statusClass}">
                         ${statusText}
                     </span>
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    ${new Date(admin.created_at).toLocaleDateString()}
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    ${createdDate}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <button onclick="adminPanel.editAdministrator('${admin.id}')" class="text-indigo-600 hover:text-indigo-900 mr-3">
+                    <button class="text-blue-600 hover:text-blue-900 mr-3 edit-admin-btn" data-admin-id="${admin.id}">
                         <i class="fas fa-edit"></i> Edit
                     </button>
-                    <button onclick="adminPanel.deleteAdministrator('${admin.id}')" class="text-red-600 hover:text-red-900">
+                    <button class="text-red-600 hover:text-red-900 delete-admin-btn" data-admin-id="${admin.id}">
                         <i class="fas fa-trash"></i> Delete
                     </button>
                 </td>
             `;
 
-            container.appendChild(row);
+            this.administratorsTable.appendChild(row);
+        });
+
+        // Add event listeners for administrator actions
+        this.administratorsTable.querySelectorAll('.edit-admin-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const adminId = btn.getAttribute('data-admin-id');
+                this.editAdministrator(adminId);
+            });
+        });
+
+        this.administratorsTable.querySelectorAll('.delete-admin-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const adminId = btn.getAttribute('data-admin-id');
+                this.deleteAdministrator(adminId);
+            });
         });
     }
 
-    async createAdministrator(username, email, password) {
+    showAdministratorModal() {
+        if (!this.administratorModal) return;
+        
+        if (this.administratorForm) this.administratorForm.reset();
+        this.administratorModal.classList.remove('hidden');
+    }
+
+    hideAdministratorModal() {
+        if (this.administratorModal) {
+            this.administratorModal.classList.add('hidden');
+        }
+    }
+
+    async handleAdministratorSubmit(e) {
+        e.preventDefault();
+
+        const username = document.getElementById('adminUsername').value.trim();
+        const email = document.getElementById('adminEmail').value.trim();
+        const password = document.getElementById('adminPassword').value;
+
+        // Client-side validation
+        if (!username) {
+            this.showError('Username is required');
+            return;
+        }
+        if (username.length < 3) {
+            this.showError('Username must be at least 3 characters');
+            return;
+        }
+        if (!email) {
+            this.showError('Email is required');
+            return;
+        }
+        if (!password || password.length < 8) {
+            this.showError('Password must be at least 8 characters');
+            return;
+        }
+
         try {
             const response = await this.makeAuthenticatedRequest('/api/admin/administrators', {
                 method: 'POST',
@@ -769,46 +871,96 @@ class AdminPanel {
                 throw new Error(data.error || 'Failed to create administrator');
             }
 
-            this.showSuccess('Administrator created successfully');
+            this.hideAdministratorModal();
             this.loadAdministrators();
-            return true;
+            this.showSuccess('Administrator created successfully');
+
         } catch (error) {
             console.error('Failed to create administrator:', error);
             this.showError(error.message);
-            return false;
         }
     }
 
     async editAdministrator(adminId) {
-        const newEmail = prompt('Enter new email (leave blank to skip):');
-        const newPassword = prompt('Enter new password (leave blank to skip):');
-
-        if (!newEmail && !newPassword) {
-            return;
-        }
-
-        try {
-            const updates = {};
-            if (newEmail) updates.email = newEmail;
-            if (newPassword) updates.password = newPassword;
-
-            const response = await this.makeAuthenticatedRequest(`/api/admin/administrators/${adminId}`, {
-                method: 'PUT',
-                body: JSON.stringify(updates)
-            });
-
-            const data = await response.json();
-
-            if (!data.success) {
-                throw new Error(data.error || 'Failed to update administrator');
+        // Create a proper modal for editing
+        const modal = document.createElement('div');
+        modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+        modal.innerHTML = `
+            <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-bold">Edit Administrator</h3>
+                    <button class="text-gray-500 hover:text-gray-700 close-edit-modal">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <form class="edit-admin-form">
+                    <div class="mb-4">
+                        <label class="block text-gray-700 text-sm font-bold mb-2">New Email (optional)</label>
+                        <input type="email" class="edit-email w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Leave blank to keep current">
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-gray-700 text-sm font-bold mb-2">New Password (optional)</label>
+                        <input type="password" class="edit-password w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Leave blank to keep current" minlength="8">
+                    </div>
+                    <div class="flex gap-4">
+                        <button type="button" class="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg close-edit-modal">Cancel</button>
+                        <button type="submit" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Update</button>
+                    </div>
+                </form>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        // Handle form submission
+        modal.querySelector('.edit-admin-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const newEmail = modal.querySelector('.edit-email').value.trim();
+            const newPassword = modal.querySelector('.edit-password').value;
+            
+            if (!newEmail && !newPassword) {
+                this.showError('Please provide at least one field to update');
+                return;
             }
-
-            this.showSuccess('Administrator updated successfully');
-            this.loadAdministrators();
-        } catch (error) {
-            console.error('Failed to update administrator:', error);
-            this.showError(error.message);
-        }
+            
+            try {
+                const updates = {};
+                if (newEmail) updates.email = newEmail;
+                if (newPassword) {
+                    if (newPassword.length < 8) {
+                        this.showError('Password must be at least 8 characters');
+                        return;
+                    }
+                    updates.password = newPassword;
+                }
+                
+                const response = await this.makeAuthenticatedRequest(`/api/admin/administrators/${adminId}`, {
+                    method: 'PUT',
+                    body: JSON.stringify(updates)
+                });
+                
+                const data = await response.json();
+                
+                if (!data.success) {
+                    throw new Error(data.error || 'Failed to update administrator');
+                }
+                
+                this.showSuccess('Administrator updated successfully');
+                this.loadAdministrators();
+                document.body.removeChild(modal);
+            } catch (error) {
+                console.error('Failed to update administrator:', error);
+                this.showError(error.message);
+            }
+        });
+        
+        // Handle modal close
+        modal.querySelectorAll('.close-edit-modal').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.body.removeChild(modal);
+            });
+        });
     }
 
     async deleteAdministrator(adminId) {
@@ -835,30 +987,26 @@ class AdminPanel {
         }
     }
 
-    showAdministratorModal() {
-        this.administratorForm.reset();
-        this.administratorModal.classList.remove('hidden');
-    }
+    // Router Management Methods (placeholder for now)
+    async loadRouters() {
+        try {
+            const response = await this.makeAuthenticatedRequest('/api/admin/routers');
+            const data = await response.json();
 
-    hideAdministratorModal() {
-        this.administratorModal.classList.add('hidden');
-    }
-
-    async handleAdministratorSubmit(e) {
-        e.preventDefault();
-
-        const username = document.getElementById('adminUsername').value;
-        const email = document.getElementById('adminEmail').value;
-        const password = document.getElementById('adminPassword').value;
-
-        const success = await this.createAdministrator(username, email, password);
-        if (success) {
-            this.hideAdministratorModal();
+            if (data.success) {
+                this.renderRouters(data.routers || []);
+            } else {
+                throw new Error(data.error || 'Failed to load routers');
+            }
+        } catch (error) {
+            console.error('Failed to load routers:', error);
+            this.showError('Failed to load routers: ' + error.message);
         }
     }
 
-    // Router Management Methods
     renderRouters(routers) {
+        if (!this.routersTable) return;
+
         this.routersTable.innerHTML = '';
 
         if (routers.length === 0) {
@@ -874,20 +1022,20 @@ class AdminPanel {
 
         routers.forEach(router => {
             const row = document.createElement('tr');
-            row.className = 'table-row';
+            row.className = 'table-row hover:bg-gray-50';
             
             const statusClass = router.active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
             const statusText = router.active ? 'Active' : 'Inactive';
             
-            const connectionClass = this.getConnectionStatusClass(router.connectionStatus);
-            const connectionText = this.getConnectionStatusText(router.connectionStatus);
+            const connectionClass = router.connectionStatus === 'connected' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
+            const connectionText = router.connectionStatus === 'connected' ? 'Connected' : 'Disconnected';
             
             row.innerHTML = `
                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                    ${router.name}
+                    ${this.escapeHtml(router.name)}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    ${router.ipAddress}
+                    ${this.escapeHtml(router.ipAddress)}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap">
                     <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${statusClass}">
@@ -903,19 +1051,13 @@ class AdminPanel {
                     ${router.lastSyncAt ? new Date(router.lastSyncAt).toLocaleString() : 'Never'}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <button onclick="adminPanel.testConnection('${router.id}')" class="text-blue-600 hover:text-blue-900 mr-3">
+                    <button class="text-blue-600 hover:text-blue-900 mr-3 test-router-btn" data-router-id="${router.id}">
                         <i class="fas fa-plug"></i> Test
                     </button>
-                    <button onclick="adminPanel.syncPackages('${router.id}')" class="text-green-600 hover:text-green-900 mr-3">
+                    <button class="text-green-600 hover:text-green-900 mr-3 sync-router-btn" data-router-id="${router.id}">
                         <i class="fas fa-sync"></i> Sync
                     </button>
-                    <button onclick="adminPanel.viewRouterStats('${router.id}')" class="text-purple-600 hover:text-purple-900 mr-3">
-                        <i class="fas fa-chart-bar"></i> Stats
-                    </button>
-                    <button onclick="adminPanel.editRouter('${router.id}')" class="text-indigo-600 hover:text-indigo-900 mr-3">
-                        <i class="fas fa-edit"></i> Edit
-                    </button>
-                    <button onclick="adminPanel.deleteRouter('${router.id}')" class="text-red-600 hover:text-red-900">
+                    <button class="text-red-600 hover:text-red-900 delete-router-btn" data-router-id="${router.id}">
                         <i class="fas fa-trash"></i> Delete
                     </button>
                 </td>
@@ -925,87 +1067,81 @@ class AdminPanel {
         });
     }
 
-    getConnectionStatusClass(status) {
-        switch (status) {
-            case 'connected': return 'bg-green-100 text-green-800';
-            case 'failed': return 'bg-red-100 text-red-800';
-            case 'timeout': return 'bg-yellow-100 text-yellow-800';
-            default: return 'bg-gray-100 text-gray-800';
+    // Sessions and Payments (placeholder methods)
+    async loadSessions() {
+        try {
+            const response = await this.makeAuthenticatedRequest('/api/admin/sessions');
+            const data = await response.json();
+
+            if (data.success) {
+                this.renderSessions(data.sessions || []);
+            }
+        } catch (error) {
+            console.error('Failed to load sessions:', error);
+            this.showError('Failed to load sessions');
         }
     }
 
-    getConnectionStatusText(status) {
-        switch (status) {
-            case 'connected': return 'Connected';
-            case 'failed': return 'Failed';
-            case 'timeout': return 'Timeout';
-            default: return 'Unknown';
+    renderSessions(sessions) {
+        if (!this.sessionsTable) return;
+
+        this.sessionsTable.innerHTML = '';
+        
+        if (sessions.length === 0) {
+            const row = document.createElement('tr');
+            row.innerHTML = `<td colspan="7" class="px-6 py-4 text-center text-gray-500">No active sessions</td>`;
+            this.sessionsTable.appendChild(row);
         }
     }
 
+    async loadPayments() {
+        try {
+            const response = await this.makeAuthenticatedRequest('/api/admin/payments');
+            const data = await response.json();
+
+            if (data.success) {
+                this.renderPayments(data.payments || []);
+            }
+        } catch (error) {
+            console.error('Failed to load payments:', error);
+            this.showError('Failed to load payments');
+        }
+    }
+
+    renderPayments(payments) {
+        if (!this.paymentsTable) return;
+
+        this.paymentsTable.innerHTML = '';
+        
+        if (payments.length === 0) {
+            const row = document.createElement('tr');
+            row.innerHTML = `<td colspan="7" class="px-6 py-4 text-center text-gray-500">No payment history</td>`;
+            this.paymentsTable.appendChild(row);
+        }
+    }
+
+    // Router wizard placeholder methods
     showRouterModal() {
-        this.currentRouterStep = 1;
-        this.routerData = {};
-        this.connectionTestPassed = false;
-        this.routerForm.reset();
-        this.updateRouterWizardStep();
-        this.routerModal.classList.remove('hidden');
+        if (this.routerModal) {
+            this.currentRouterStep = 1;
+            this.connectionTestPassed = false;
+            this.routerData = {};
+            this.routerModal.classList.remove('hidden');
+            this.updateRouterWizardStep();
+        }
     }
 
     hideRouterModal() {
-        this.routerModal.classList.add('hidden');
-        this.currentRouterStep = 1;
-        this.routerData = {};
-        this.connectionTestPassed = false;
+        if (this.routerModal) {
+            this.routerModal.classList.add('hidden');
+        }
     }
 
     nextRouterStep() {
-        if (this.currentRouterStep === 1) {
-            // Validate step 1
-            const name = document.getElementById('routerName').value;
-            const ipAddress = document.getElementById('routerIpAddress').value;
-            
-            if (!name || !ipAddress) {
-                this.showError('Please fill in all required fields');
-                return;
-            }
-            
-            // Validate IP address format
-            const ipRegex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
-            if (!ipRegex.test(ipAddress)) {
-                this.showError('Please enter a valid IP address');
-                return;
-            }
-            
-            this.routerData.name = name;
-            this.routerData.ipAddress = ipAddress;
-            this.currentRouterStep = 2;
-        } else if (this.currentRouterStep === 2) {
-            // Validate step 2
-            const apiUsername = document.getElementById('routerApiUsername').value;
-            const apiPassword = document.getElementById('routerApiPassword').value;
-            const apiPort = document.getElementById('routerApiPort').value;
-            
-            if (!apiUsername || !apiPassword) {
-                this.showError('Please fill in all required fields');
-                return;
-            }
-            
-            if (apiUsername === 'admin') {
-                this.showError('Do not use the admin account. Create a dedicated API user.');
-                return;
-            }
-            
-            this.routerData.apiUsername = apiUsername;
-            this.routerData.apiPassword = apiPassword;
-            this.routerData.apiPort = parseInt(apiPort) || 8729;
-            this.currentRouterStep = 3;
-            
-            // Update summary
-            this.updateRouterSummary();
+        if (this.currentRouterStep < 3) {
+            this.currentRouterStep++;
+            this.updateRouterWizardStep();
         }
-        
-        this.updateRouterWizardStep();
     }
 
     prevRouterStep() {
@@ -1017,260 +1153,63 @@ class AdminPanel {
 
     updateRouterWizardStep() {
         // Hide all steps
-        document.getElementById('routerStep1').classList.add('hidden');
-        document.getElementById('routerStep2').classList.add('hidden');
-        document.getElementById('routerStep3').classList.add('hidden');
-        
-        // Show current step
-        document.getElementById(`routerStep${this.currentRouterStep}`).classList.remove('hidden');
-        
-        // Update step indicators
-        for (let i = 1; i <= 3; i++) {
-            const indicator = document.getElementById(`step${i}Indicator`);
-            const progress = document.getElementById(`step${i}Progress`);
-            
-            if (i < this.currentRouterStep) {
-                // Completed step
-                indicator.className = 'flex items-center justify-center w-8 h-8 bg-green-600 text-white rounded-full text-sm font-medium';
-                indicator.innerHTML = '<i class="fas fa-check"></i>';
-                progress.style.width = '100%';
-            } else if (i === this.currentRouterStep) {
-                // Current step
-                indicator.className = 'flex items-center justify-center w-8 h-8 bg-blue-600 text-white rounded-full text-sm font-medium';
-                indicator.textContent = i;
-                progress.style.width = '50%';
-            } else {
-                // Future step
-                indicator.className = 'flex items-center justify-center w-8 h-8 bg-gray-200 text-gray-600 rounded-full text-sm font-medium';
-                indicator.textContent = i;
-                progress.style.width = '0%';
+        const steps = ['routerStep1', 'routerStep2', 'routerStep3'];
+        steps.forEach(stepId => {
+            const step = document.getElementById(stepId);
+            if (step) {
+                step.classList.remove('active');
+                step.style.display = 'none';
             }
-        }
-        
-        // Update navigation buttons
-        this.routerPrevButton.classList.toggle('hidden', this.currentRouterStep === 1);
-        this.routerNextButton.classList.toggle('hidden', this.currentRouterStep === 3);
-        this.testConnectionButton.classList.toggle('hidden', this.currentRouterStep !== 3);
-        this.saveRouter.classList.toggle('hidden', this.currentRouterStep !== 3 || !this.connectionTestPassed);
-    }
+        });
 
-    updateRouterSummary() {
-        document.getElementById('summaryName').textContent = this.routerData.name || '-';
-        document.getElementById('summaryIpAddress').textContent = this.routerData.ipAddress || '-';
-        document.getElementById('summaryApiUsername').textContent = this.routerData.apiUsername || '-';
-        document.getElementById('summaryApiPort').textContent = this.routerData.apiPort || '-';
+        // Show current step
+        const currentStep = document.getElementById(`routerStep${this.currentRouterStep}`);
+        if (currentStep) {
+            currentStep.classList.add('active');
+            currentStep.style.display = 'block';
+        }
+
+        // Update navigation buttons
+        if (this.routerPrevButton) {
+            this.routerPrevButton.classList.toggle('hidden', this.currentRouterStep === 1);
+        }
+        if (this.routerNextButton) {
+            this.routerNextButton.classList.toggle('hidden', this.currentRouterStep === 3);
+        }
+        if (this.testConnectionButton) {
+            this.testConnectionButton.classList.toggle('hidden', this.currentRouterStep !== 3);
+        }
     }
 
     togglePasswordVisibility() {
         const passwordInput = document.getElementById('routerApiPassword');
-        const toggleIcon = this.toggleRouterPassword.querySelector('i');
+        const toggleIcon = this.toggleRouterPassword?.querySelector('i');
         
-        if (passwordInput.type === 'password') {
-            passwordInput.type = 'text';
-            toggleIcon.className = 'fas fa-eye-slash text-gray-400';
-        } else {
-            passwordInput.type = 'password';
-            toggleIcon.className = 'fas fa-eye text-gray-400';
+        if (passwordInput && toggleIcon) {
+            if (passwordInput.type === 'password') {
+                passwordInput.type = 'text';
+                toggleIcon.className = 'fas fa-eye-slash text-gray-400';
+            } else {
+                passwordInput.type = 'password';
+                toggleIcon.className = 'fas fa-eye text-gray-400';
+            }
         }
     }
 
     async testRouterConnection() {
-        const testButton = this.testConnectionButton;
-        const originalText = testButton.innerHTML;
-        const resultDiv = document.getElementById('connectionTestResult');
-        
-        try {
-            testButton.disabled = true;
-            testButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Testing...';
-            
-            // Create router first to get ID for testing
-            const response = await this.makeAuthenticatedRequest('/api/admin/routers', {
-                method: 'POST',
-                body: JSON.stringify(this.routerData)
-            });
-            
-            const data = await response.json();
-            
-            if (!data.success) {
-                throw new Error(data.error || 'Failed to create router');
-            }
-            
-            this.routerData.id = data.router.id;
-            const connectionTest = data.router.connectionTest;
-            
-            // Show test results
-            resultDiv.classList.remove('hidden');
-            
-            if (connectionTest.success) {
-                resultDiv.innerHTML = `
-                    <div class="bg-green-50 border border-green-200 rounded-lg p-4">
-                        <div class="flex">
-                            <div class="flex-shrink-0">
-                                <i class="fas fa-check-circle text-green-400"></i>
-                            </div>
-                            <div class="ml-3">
-                                <h3 class="text-sm font-medium text-green-800">Connection Successful!</h3>
-                                <div class="mt-2 text-sm text-green-700">
-                                    <p>Router Identity: ${connectionTest.details?.identity || 'Unknown'}</p>
-                                    <p>Response Time: ${connectionTest.details?.responseTime || 0}ms</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                `;
-                this.connectionTestPassed = true;
-            } else {
-                resultDiv.innerHTML = `
-                    <div class="bg-red-50 border border-red-200 rounded-lg p-4">
-                        <div class="flex">
-                            <div class="flex-shrink-0">
-                                <i class="fas fa-exclamation-circle text-red-400"></i>
-                            </div>
-                            <div class="ml-3">
-                                <h3 class="text-sm font-medium text-red-800">Connection Failed</h3>
-                                <div class="mt-2 text-sm text-red-700">
-                                    <p>${connectionTest.message}</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                `;
-                this.connectionTestPassed = false;
-            }
-            
-            this.updateRouterWizardStep();
-            
-        } catch (error) {
-            console.error('Connection test failed:', error);
-            resultDiv.classList.remove('hidden');
-            resultDiv.innerHTML = `
-                <div class="bg-red-50 border border-red-200 rounded-lg p-4">
-                    <div class="flex">
-                        <div class="flex-shrink-0">
-                            <i class="fas fa-exclamation-circle text-red-400"></i>
-                        </div>
-                        <div class="ml-3">
-                            <h3 class="text-sm font-medium text-red-800">Test Failed</h3>
-                            <div class="mt-2 text-sm text-red-700">
-                                <p>${error.message}</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-            this.connectionTestPassed = false;
-            this.updateRouterWizardStep();
-        } finally {
-            testButton.disabled = false;
-            testButton.innerHTML = originalText;
-        }
+        this.showInfo('Router connection testing not yet implemented');
     }
 
     async handleRouterSubmit(e) {
         e.preventDefault();
-        
-        if (!this.connectionTestPassed) {
-            this.showError('Please test the connection first');
-            return;
-        }
-        
-        try {
-            this.hideRouterModal();
-            this.loadRouters();
-            this.showSuccess('Router added successfully');
-        } catch (error) {
-            console.error('Failed to save router:', error);
-            this.showError(error.message);
-        }
+        this.showInfo('Router creation not yet implemented');
     }
+}
 
-    async testConnection(routerId) {
-        try {
-            this.showInfo('Testing router connection...');
-            
-            const response = await this.makeAuthenticatedRequest(`/api/admin/routers/${routerId}/test-connection`, {
-                method: 'POST'
-            });
-            
-            const data = await response.json();
-            
-            if (data.success && data.connectionTest.success) {
-                this.showSuccess(`Connection successful! Identity: ${data.connectionTest.details?.identity || 'Unknown'}`);
-            } else {
-                this.showError(`Connection failed: ${data.connectionTest?.message || data.error}`);
-            }
-            
-            this.loadRouters(); // Refresh to show updated connection status
-        } catch (error) {
-            console.error('Failed to test connection:', error);
-            this.showError('Failed to test connection: ' + error.message);
-        }
-    }
-
-    async syncPackages(routerId) {
-        try {
-            this.showInfo('Syncing packages to router...');
-            
-            const response = await this.makeAuthenticatedRequest(`/api/admin/routers/${routerId}/sync-packages`, {
-                method: 'POST'
-            });
-            
-            const data = await response.json();
-            
-            if (data.success) {
-                this.showSuccess(`Packages synced successfully! ${data.syncResult.syncedCount || 0} packages synced.`);
-            } else {
-                this.showError(`Sync failed: ${data.error}`);
-            }
-            
-            this.loadRouters(); // Refresh to show updated sync status
-        } catch (error) {
-            console.error('Failed to sync packages:', error);
-            this.showError('Failed to sync packages: ' + error.message);
-        }
-    }
-
-    async viewRouterStats(routerId) {
-        try {
-            const response = await this.makeAuthenticatedRequest(`/api/admin/routers/${routerId}/stats`);
-            const data = await response.json();
-            
-            if (data.success) {
-                const stats = data.stats;
-                alert(`Router Statistics:\n\nUptime: ${stats.uptime}\nCPU Load: ${stats.cpuLoad}\nFree Memory: ${stats.freeMemory}\nActive Users: ${stats.activeUsers}`);
-            } else {
-                this.showError(`Failed to get stats: ${data.error}`);
-            }
-        } catch (error) {
-            console.error('Failed to get router stats:', error);
-            this.showError('Failed to get router stats: ' + error.message);
-        }
-    }
-
-    async editRouter(routerId) {
-        this.showInfo('Router editing not yet implemented');
-    }
-
-    async deleteRouter(routerId) {
-        if (!confirm('Are you sure you want to delete this router? This action cannot be undone.')) {
-            return;
-        }
-
-        try {
-            const response = await this.makeAuthenticatedRequest(`/api/admin/routers/${routerId}`, {
-                method: 'DELETE'
-            });
-
-            const data = await response.json();
-
-            if (!data.success) {
-                throw new Error(data.error || 'Failed to delete router');
-            }
-
-            this.loadRouters();
-            this.showSuccess('Router deleted successfully');
-
-        } catch (error) {
+// Initialize the admin panel when the DOM is loaded
+document.addEventListener('DOMContentLoaded', () => {
+    window.adminPanel = new AdminPanel();
+});
             console.error('Failed to delete router:', error);
             this.showError(error.message);
         }
