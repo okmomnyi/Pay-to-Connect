@@ -177,10 +177,5 @@ export const resetPasswordLimiter = rateLimiter.createLimiter({
     action: 'reset_password'
 });
 
-export const adminLoginLimiter = rateLimiter.createLimiter({
-    maxAttempts: 5,
-    windowMinutes: 15,
-    action: 'admin_login'
-});
 
 export default rateLimiter;

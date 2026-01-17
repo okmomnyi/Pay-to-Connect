@@ -170,6 +170,11 @@ class Server {
             res.sendFile(join(__dirname, '../public/index.html'));
         });
 
+        // Admin panel route
+        this.app.get('/admin', (req, res) => {
+            res.sendFile(join(__dirname, '../public/admin.html'));
+        });
+
         // Captive portal redirect handler - redirect to portal (not login)
         this.app.get('/', (req, res) => {
             res.redirect('/portal');
@@ -265,7 +270,7 @@ class Server {
                 logger.info(`HTTP server listening on port ${port}`);
                 logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
                 logger.info(`Captive portal: http://localhost:${port}/portal`);
-                logger.info(`Admin panel: http://localhost:${port}/api/admin`);
+                logger.info(`Admin panel: http://localhost:${port}/admin`);
             });
 
             // Start RADIUS server

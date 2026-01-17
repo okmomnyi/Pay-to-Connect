@@ -3,95 +3,28 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Panel - SmartWiFi</title>
+    <title>Admin Panel - Captive Portal</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        .sidebar-item:hover { background-color: rgba(59, 130, 246, 0.1); }
-        .sidebar-item.active { background-color: rgba(59, 130, 246, 0.2); border-right: 3px solid #3b82f6; }
-        .table-row:hover { background-color: rgba(0, 0, 0, 0.02); }
-        .modal { backdrop-filter: blur(4px); }
-        .modal-content { animation: modalSlideIn 0.3s ease-out; }
-        @keyframes modalSlideIn { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
-        .step-content { display: none; }
-        .step-content.active { display: block; }
-
-        /* Toast Notification Styles */
-        .toast-container {
+        .sidebar-link.active {
+            background-color: rgba(59, 130, 246, 0.1);
+            border-left: 4px solid #3b82f6;
+        }
+        .modal {
+            display: none;
+        }
+        .modal.active {
+            display: flex;
+        }
+        .toast {
             position: fixed;
             top: 20px;
             right: 20px;
             z-index: 9999;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-
-        .toast {
             min-width: 300px;
-            padding: 16px 20px;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-            display: flex;
-            align-items: center;
-            gap: 12px;
             animation: slideIn 0.3s ease-out;
-            background: white;
         }
-
-        .toast.success {
-            border-left: 4px solid #10b981;
-        }
-
-        .toast.error {
-            border-left: 4px solid #ef4444;
-        }
-
-        .toast.info {
-            border-left: 4px solid #3b82f6;
-        }
-
-        .toast.warning {
-            border-left: 4px solid #f59e0b;
-        }
-
-        .toast-icon {
-            font-size: 20px;
-        }
-
-        .toast.success .toast-icon {
-            color: #10b981;
-        }
-
-        .toast.error .toast-icon {
-            color: #ef4444;
-        }
-
-        .toast.info .toast-icon {
-            color: #3b82f6;
-        }
-
-        .toast.warning .toast-icon {
-            color: #f59e0b;
-        }
-
-        .toast-message {
-            flex: 1;
-            font-size: 14px;
-            color: #374151;
-        }
-
-        .toast-close {
-            cursor: pointer;
-            color: #9ca3af;
-            font-size: 18px;
-            line-height: 1;
-        }
-
-        .toast-close:hover {
-            color: #374151;
-        }
-
         @keyframes slideIn {
             from {
                 transform: translateX(400px);
@@ -102,326 +35,326 @@
                 opacity: 1;
             }
         }
-
-        @keyframes slideOut {
-            from {
-                transform: translateX(0);
-                opacity: 1;
-            }
-            to {
-                transform: translateX(400px);
-                opacity: 0;
-            }
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3b82f6;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
         }
-
-        .toast.removing {
-            animation: slideOut 0.3s ease-out forwards;
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
     </style>
 </head>
 <body class="bg-gray-100">
-    <!-- Login Modal -->
-    <div id="loginModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div class="bg-white rounded-lg p-8 max-w-md w-full mx-4">
-            <div class="text-center mb-6">
-                <div class="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <i class="fas fa-shield-alt text-2xl text-white"></i>
-                </div>
-                <h2 class="text-2xl font-bold text-gray-900">SmartWiFi Admin Login</h2>
-                <p class="text-gray-600">Enter your credentials to access the admin panel</p>
+    <!-- Toast Container -->
+    <div id="toast-container"></div>
+
+    <!-- Login Page -->
+    <div id="login-page" class="min-h-screen flex items-center justify-center">
+        <div class="bg-white p-8 rounded-lg shadow-lg w-full max-w-md">
+            <div class="text-center mb-8">
+                <h1 class="text-3xl font-bold text-gray-800">Admin Panel</h1>
+                <p class="text-gray-600 mt-2">Sign in to manage your captive portal</p>
             </div>
-            
-            <form id="loginForm">
+            <form id="login-form">
                 <div class="mb-4">
-                    <label class="block text-gray-700 text-sm font-bold mb-2">Username</label>
-                    <input type="text" id="username" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                    <label class="block text-gray-700 text-sm font-bold mb-2">Username or Email</label>
+                    <input type="text" id="login-username" required
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500">
                 </div>
-                
                 <div class="mb-6">
                     <label class="block text-gray-700 text-sm font-bold mb-2">Password</label>
-                    <input type="password" id="password" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                    <input type="password" id="login-password" required
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500">
                 </div>
-                
-                <div id="loginError" class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4"></div>
-                
-                <button type="submit" id="loginButton" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition duration-200">
-                    <i class="fas fa-sign-in-alt mr-2"></i>Login
+                <button type="submit" id="login-btn"
+                    class="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition duration-200 flex items-center justify-center">
+                    <span id="login-btn-text">Sign In</span>
+                    <div id="login-spinner" class="spinner ml-2 hidden"></div>
                 </button>
             </form>
         </div>
     </div>
 
-    <!-- Main App -->
-    <div id="adminApp" class="hidden">
-        <!-- Header -->
-        <header class="bg-white shadow-sm border-b border-gray-200">
-            <div class="flex justify-between items-center px-6 py-4">
-                <div class="flex items-center">
-                    <button id="sidebarToggle" class="lg:hidden mr-4 text-gray-600 hover:text-gray-900">
-                        <i class="fas fa-bars text-xl"></i>
-                    </button>
-                    <h1 class="text-3xl font-bold text-gray-900">SmartWiFi Admin</h1>
-                </div>
-                
-                <div class="flex items-center space-x-4">
-                    <span id="adminUsername" class="text-gray-700"></span>
-                    <button id="logoutButton" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition duration-200">
-                        <i class="fas fa-sign-out-alt mr-2"></i>Logout
-                    </button>
+    <!-- Main Admin Panel -->
+    <div id="admin-panel" class="hidden">
+        <!-- Top Navigation -->
+        <nav class="bg-white shadow-lg">
+            <div class="max-w-full mx-auto px-4">
+                <div class="flex justify-between items-center h-16">
+                    <div class="flex items-center">
+                        <h1 class="text-xl font-bold text-gray-800">Captive Portal Admin</h1>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <span class="text-gray-700" id="admin-name"></span>
+                        <button onclick="logout()" class="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700">
+                            <i class="fas fa-sign-out-alt mr-2"></i>Logout
+                        </button>
+                    </div>
                 </div>
             </div>
-        </header>
+        </nav>
 
         <div class="flex">
             <!-- Sidebar -->
-            <nav id="sidebar" class="bg-gray-800 text-white w-64 min-h-screen sidebar-transition transform -translate-x-full lg:translate-x-0 fixed lg:relative z-40">
-                <div class="p-6">
-                    <div class="space-y-2">
-                        <a href="#" data-section="dashboard" class="nav-link flex items-center px-4 py-2 rounded-lg hover:bg-gray-700 transition duration-200">
-                            <i class="fas fa-chart-line mr-3"></i>Dashboard
-                        </a>
-                        <a href="#" data-section="packages" class="nav-link flex items-center px-4 py-2 rounded-lg hover:bg-gray-700 transition duration-200">
-                            <i class="fas fa-box mr-3"></i>Packages
-                        </a>
-                        <a href="#" data-section="routers" class="nav-link flex items-center px-4 py-2 rounded-lg hover:bg-gray-700 transition duration-200">
-                            <i class="fas fa-wifi mr-3"></i>Routers
-                        </a>
-                        <a href="#" data-section="sessions" class="nav-link flex items-center px-4 py-2 rounded-lg hover:bg-gray-700 transition duration-200">
-                            <i class="fas fa-users mr-3"></i>Sessions
-                        </a>
-                        <a href="#" data-section="payments" class="nav-link flex items-center px-4 py-2 rounded-lg hover:bg-gray-700 transition duration-200">
-                            <i class="fas fa-money-bill-wave mr-3"></i>Payments
-                        </a>
-                        <a href="#" class="nav-link" data-section="administrators">
-                            <i class="fas fa-user-shield mr-3"></i>
-                            Administrators
-                        </a>
-                    </div>
-                </div>
-            </nav>
+            <aside class="w-64 bg-white h-screen shadow-lg">
+                <nav class="mt-4">
+                    <a href="#" onclick="showSection('dashboard')" class="sidebar-link active flex items-center px-6 py-3 text-gray-700 hover:bg-gray-100">
+                        <i class="fas fa-chart-line mr-3"></i>Dashboard
+                    </a>
+                    <a href="#" onclick="showSection('users')" class="sidebar-link flex items-center px-6 py-3 text-gray-700 hover:bg-gray-100">
+                        <i class="fas fa-users mr-3"></i>Users
+                    </a>
+                    <a href="#" onclick="showSection('packages')" class="sidebar-link flex items-center px-6 py-3 text-gray-700 hover:bg-gray-100">
+                        <i class="fas fa-box mr-3"></i>Packages
+                    </a>
+                    <a href="#" onclick="showSection('routers')" class="sidebar-link flex items-center px-6 py-3 text-gray-700 hover:bg-gray-100">
+                        <i class="fas fa-network-wired mr-3"></i>Routers
+                    </a>
+                    <a href="#" onclick="showSection('sessions')" class="sidebar-link flex items-center px-6 py-3 text-gray-700 hover:bg-gray-100">
+                        <i class="fas fa-clock mr-3"></i>Sessions
+                    </a>
+                    <a href="#" onclick="showSection('payments')" class="sidebar-link flex items-center px-6 py-3 text-gray-700 hover:bg-gray-100">
+                        <i class="fas fa-money-bill mr-3"></i>Payments
+                    </a>
+                    <a href="#" onclick="showSection('estates')" class="sidebar-link flex items-center px-6 py-3 text-gray-700 hover:bg-gray-100">
+                        <i class="fas fa-building mr-3"></i>Estates
+                    </a>
+                    <a href="#" onclick="showSection('admins')" class="sidebar-link flex items-center px-6 py-3 text-gray-700 hover:bg-gray-100">
+                        <i class="fas fa-user-shield mr-3"></i>Admins
+                    </a>
+                    <a href="#" onclick="showSection('logs')" class="sidebar-link flex items-center px-6 py-3 text-gray-700 hover:bg-gray-100">
+                        <i class="fas fa-file-alt mr-3"></i>Audit Logs
+                    </a>
+                </nav>
+            </aside>
 
             <!-- Main Content -->
-            <main class="flex-1 p-6">
+            <main class="flex-1 p-6 overflow-y-auto" style="height: calc(100vh - 64px);">
                 <!-- Dashboard Section -->
-                <div id="dashboardSection" class="section">
-                    <div class="mb-6">
-                        <h2 class="text-3xl font-bold text-gray-900">Dashboard</h2>
-                        <p class="text-gray-600">Overview of system statistics</p>
-                    </div>
-
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                        <div class="bg-white rounded-lg shadow p-6">
-                            <div class="flex items-center">
-                                <div class="p-3 rounded-full bg-blue-100 text-blue-600">
-                                    <i class="fas fa-users text-xl"></i>
+                <div id="dashboard-section" class="section">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-6">Dashboard</h2>
+                    
+                    <!-- Stats Cards -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+                        <div class="bg-white p-6 rounded-lg shadow">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-gray-600 text-sm">Total Users</p>
+                                    <p class="text-3xl font-bold text-gray-800" id="stat-total-users">0</p>
                                 </div>
-                                <div class="ml-4">
-                                    <p class="text-sm font-medium text-gray-600">Active Sessions</p>
-                                    <p id="activeSessions" class="text-2xl font-bold text-gray-900">-</p>
+                                <div class="bg-blue-100 p-3 rounded-full">
+                                    <i class="fas fa-users text-blue-600 text-2xl"></i>
                                 </div>
                             </div>
                         </div>
-
-                        <div class="bg-white rounded-lg shadow p-6">
-                            <div class="flex items-center">
-                                <div class="p-3 rounded-full bg-green-100 text-green-600">
-                                    <i class="fas fa-money-bill text-xl"></i>
+                        <div class="bg-white p-6 rounded-lg shadow">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-gray-600 text-sm">Active Users</p>
+                                    <p class="text-3xl font-bold text-green-600" id="stat-active-users">0</p>
                                 </div>
-                                <div class="ml-4">
-                                    <p class="text-sm font-medium text-gray-600">Today's Revenue</p>
-                                    <p id="todayRevenue" class="text-2xl font-bold text-gray-900">-</p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="bg-white rounded-lg shadow p-6">
-                            <div class="flex items-center">
-                                <div class="p-3 rounded-full bg-yellow-100 text-yellow-600">
-                                    <i class="fas fa-mobile-alt text-xl"></i>
-                                </div>
-                                <div class="ml-4">
-                                    <p class="text-sm font-medium text-gray-600">Total Devices</p>
-                                    <p id="totalDevices" class="text-2xl font-bold text-gray-900">-</p>
+                                <div class="bg-green-100 p-3 rounded-full">
+                                    <i class="fas fa-user-check text-green-600 text-2xl"></i>
                                 </div>
                             </div>
                         </div>
-
-                        <div class="bg-white rounded-lg shadow p-6">
-                            <div class="flex items-center">
-                                <div class="p-3 rounded-full bg-purple-100 text-purple-600">
-                                    <i class="fas fa-chart-line text-xl"></i>
+                        <div class="bg-white p-6 rounded-lg shadow">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-gray-600 text-sm">Revenue (Month)</p>
+                                    <p class="text-3xl font-bold text-purple-600" id="stat-revenue-month">KES 0</p>
                                 </div>
-                                <div class="ml-4">
-                                    <p class="text-sm font-medium text-gray-600">Total Revenue</p>
-                                    <p id="totalRevenue" class="text-2xl font-bold text-gray-900">-</p>
+                                <div class="bg-purple-100 p-3 rounded-full">
+                                    <i class="fas fa-money-bill-wave text-purple-600 text-2xl"></i>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bg-white p-6 rounded-lg shadow">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-gray-600 text-sm">Routers Online</p>
+                                    <p class="text-3xl font-bold text-orange-600" id="stat-routers-online">0</p>
+                                </div>
+                                <div class="bg-orange-100 p-3 rounded-full">
+                                    <i class="fas fa-network-wired text-orange-600 text-2xl"></i>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    <div class="bg-white rounded-lg shadow">
-                        <div class="px-6 py-4 border-b border-gray-200">
-                            <h3 class="text-lg font-semibold text-gray-900">Recent Sessions</h3>
+                    <!-- Recent Activity -->
+                    <div class="bg-white p-6 rounded-lg shadow">
+                        <h3 class="text-xl font-bold text-gray-800 mb-4">Recent Activity</h3>
+                        <div id="recent-activity" class="space-y-2">
+                            <p class="text-gray-500">Loading...</p>
                         </div>
-                        <div class="overflow-x-auto">
-                            <table class="min-w-full divide-y divide-gray-200">
-                                <thead class="bg-gray-50">
-                                    <tr>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Device</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Package</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="recentSessionsTable" class="bg-white divide-y divide-gray-200">
-                                    <!-- Recent sessions will be loaded here -->
-                                </tbody>
-                            </table>
-                        </div>
+                    </div>
+                </div>
+
+                <!-- Users Section -->
+                <div id="users-section" class="section hidden">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-2xl font-bold text-gray-800">Users Management</h2>
+                        <button onclick="searchUsers()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
+                            <i class="fas fa-search mr-2"></i>Search
+                        </button>
+                    </div>
+                    <div class="bg-white rounded-lg shadow overflow-hidden">
+                        <table class="min-w-full">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Username</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Package</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="users-table-body" class="bg-white divide-y divide-gray-200">
+                                <tr>
+                                    <td colspan="5" class="px-6 py-4 text-center text-gray-500">Loading users...</td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
 
                 <!-- Packages Section -->
-                <div id="packagesSection" class="section hidden">
-                    <div class="mb-6 flex justify-between items-center">
-                        <div>
-                            <h2 class="text-3xl font-bold text-gray-900">Packages</h2>
-                            <p class="text-gray-600">Manage Wi-Fi access packages</p>
-                        </div>
-                        <button id="addPackageButton" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition duration-200">
+                <div id="packages-section" class="section hidden">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-2xl font-bold text-gray-800">Packages Management</h2>
+                        <button onclick="showAddPackageModal()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
                             <i class="fas fa-plus mr-2"></i>Add Package
                         </button>
                     </div>
-
-                    <div class="bg-white rounded-lg shadow overflow-hidden">
-                        <table class="min-w-full divide-y divide-gray-200">
-                            <thead class="bg-gray-50">
-                                <tr>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Duration</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Price (KES)</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="packagesTable" class="bg-white divide-y divide-gray-200">
-                                <!-- Packages will be loaded here -->
-                            </tbody>
-                        </table>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="packages-grid">
+                        <p class="text-gray-500">Loading packages...</p>
                     </div>
                 </div>
 
                 <!-- Routers Section -->
-                <div id="routersSection" class="section hidden">
-                    <div class="mb-6 flex justify-between items-center">
-                        <div>
-                            <h2 class="text-3xl font-bold text-gray-900">Router Management</h2>
-                            <p class="text-gray-600">Configure and manage MikroTik routers</p>
-                        </div>
-                        <button id="addRouterButton" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition duration-200">
+                <div id="routers-section" class="section hidden">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-2xl font-bold text-gray-800">Routers Management</h2>
+                        <button onclick="showAddRouterModal()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
                             <i class="fas fa-plus mr-2"></i>Add Router
                         </button>
                     </div>
-
-                    <div class="bg-white rounded-lg shadow overflow-hidden">
-                        <table class="min-w-full divide-y divide-gray-200">
-                            <thead class="bg-gray-50">
-                                <tr>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">IP Address</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Connection</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Sync</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="routersTable" class="bg-white divide-y divide-gray-200">
-                                <!-- Routers will be loaded here -->
-                            </tbody>
-                        </table>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="routers-grid">
+                        <p class="text-gray-500">Loading routers...</p>
                     </div>
                 </div>
 
                 <!-- Sessions Section -->
-                <div id="sessionsSection" class="section hidden">
-                    <div class="mb-6">
-                        <h2 class="text-3xl font-bold text-gray-900">Active Sessions</h2>
-                        <p class="text-gray-600">Monitor user sessions and connections</p>
-                    </div>
-
+                <div id="sessions-section" class="section hidden">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-6">Active Sessions</h2>
                     <div class="bg-white rounded-lg shadow overflow-hidden">
-                        <table class="min-w-full divide-y divide-gray-200">
+                        <table class="min-w-full">
                             <thead class="bg-gray-50">
                                 <tr>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Device</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Package</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Start Time</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Duration</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Data Used</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Username</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Package</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Start Time</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Expires</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                                 </tr>
                             </thead>
-                            <tbody id="sessionsTable" class="bg-white divide-y divide-gray-200">
-                                <!-- Sessions will be loaded here -->
+                            <tbody id="sessions-table-body" class="bg-white divide-y divide-gray-200">
+                                <tr>
+                                    <td colspan="5" class="px-6 py-4 text-center text-gray-500">Loading sessions...</td>
+                                </tr>
                             </tbody>
                         </table>
                     </div>
                 </div>
 
                 <!-- Payments Section -->
-                <div id="paymentsSection" class="section hidden">
-                    <div class="mb-6">
-                        <h2 class="text-3xl font-bold text-gray-900">Payment History</h2>
-                        <p class="text-gray-600">View payment transactions and revenue</p>
-                    </div>
-
+                <div id="payments-section" class="section hidden">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-6">Payments & Transactions</h2>
                     <div class="bg-white rounded-lg shadow overflow-hidden">
-                        <table class="min-w-full divide-y divide-gray-200">
+                        <table class="min-w-full">
                             <thead class="bg-gray-50">
                                 <tr>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Transaction ID</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Device</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Package</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Method</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Transaction ID</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">User</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
                                 </tr>
                             </thead>
-                            <tbody id="paymentsTable" class="bg-white divide-y divide-gray-200">
-                                <!-- Payments will be loaded here -->
+                            <tbody id="payments-table-body" class="bg-white divide-y divide-gray-200">
+                                <tr>
+                                    <td colspan="5" class="px-6 py-4 text-center text-gray-500">Loading payments...</td>
+                                </tr>
                             </tbody>
                         </table>
                     </div>
                 </div>
 
-                <!-- Administrators Section -->
-                <div id="administratorsSection" class="section hidden">
-                    <div class="mb-6 flex justify-between items-center">
-                        <div>
-                            <h2 class="text-3xl font-bold text-gray-900">Administrators</h2>
-                            <p class="text-gray-600">Manage admin users and permissions</p>
-                        </div>
-                        <button id="addAdministratorButton" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition duration-200">
-                            <i class="fas fa-plus mr-2"></i>Add Administrator
+                <!-- Estates Section -->
+                <div id="estates-section" class="section hidden">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-2xl font-bold text-gray-800">Estates Management</h2>
+                        <button onclick="showAddEstateModal()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
+                            <i class="fas fa-plus mr-2"></i>Add Estate
                         </button>
                     </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="estates-grid">
+                        <p class="text-gray-500">Loading estates...</p>
+                    </div>
+                </div>
 
+                <!-- Admins Section -->
+                <div id="admins-section" class="section hidden">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-2xl font-bold text-gray-800">Admin Users</h2>
+                        <button onclick="showAddAdminModal()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
+                            <i class="fas fa-plus mr-2"></i>Add Admin
+                        </button>
+                    </div>
                     <div class="bg-white rounded-lg shadow overflow-hidden">
-                        <table class="min-w-full divide-y divide-gray-200">
+                        <table class="min-w-full">
                             <thead class="bg-gray-50">
                                 <tr>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Username</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Username</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Roles</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                                 </tr>
                             </thead>
-                            <tbody id="administratorsTable" class="bg-white divide-y divide-gray-200">
-                                <!-- Administrators will be loaded here -->
+                            <tbody id="admins-table-body" class="bg-white divide-y divide-gray-200">
+                                <tr>
+                                    <td colspan="5" class="px-6 py-4 text-center text-gray-500">Loading admins...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Logs Section -->
+                <div id="logs-section" class="section hidden">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-6">Audit Logs</h2>
+                    <div class="bg-white rounded-lg shadow overflow-hidden">
+                        <table class="min-w-full">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Timestamp</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Admin</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Action</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Resource</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="logs-table-body" class="bg-white divide-y divide-gray-200">
+                                <tr>
+                                    <td colspan="5" class="px-6 py-4 text-center text-gray-500">Loading logs...</td>
+                                </tr>
                             </tbody>
                         </table>
                     </div>
@@ -430,256 +363,9 @@
         </div>
     </div>
 
-    <!-- Toast Container -->
-    <div id="toastContainer" class="toast-container"></div>
+    <!-- Modals will be added dynamically -->
+    <div id="modal-container"></div>
 
-    <!-- Package Modal -->
-    <div id="packageModal" class="modal fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
-        <div class="modal-content bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <div class="flex justify-between items-center mb-4">
-                <h3 id="packageModalTitle" class="text-lg font-bold text-gray-900">Add Package</h3>
-                <button id="closePackageModal" class="text-gray-400 hover:text-gray-600">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-            
-            <form id="packageForm">
-                <div class="mb-4">
-                    <label class="block text-gray-700 text-sm font-bold mb-2">Package Name *</label>
-                    <input type="text" id="packageName" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
-                </div>
-                
-                <div class="mb-4">
-                    <label class="block text-gray-700 text-sm font-bold mb-2">Description</label>
-                    <textarea id="packageDescription" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" rows="3"></textarea>
-                </div>
-                
-                <div class="mb-4">
-                    <label class="block text-gray-700 text-sm font-bold mb-2">Package Type *</label>
-                    <select id="packageType" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
-                        <option value="time">Time-based</option>
-                        <option value="data">Data-based</option>
-                        <option value="unlimited">Unlimited</option>
-                    </select>
-                </div>
-                
-                <div class="mb-4">
-                    <label class="block text-gray-700 text-sm font-bold mb-2">Duration (minutes) *</label>
-                    <input type="number" id="packageDuration" min="1" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
-                </div>
-                
-                <div class="mb-6">
-                    <label class="block text-gray-700 text-sm font-bold mb-2">Price (KES) *</label>
-                    <input type="number" id="packagePrice" min="0" step="0.01" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
-                </div>
-                
-                <div class="flex space-x-3">
-                    <button type="button" id="cancelPackage" class="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 font-bold py-2 px-4 rounded-lg transition duration-200">
-                        Cancel
-                    </button>
-                    <button type="submit" id="savePackage" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition duration-200">
-                        Save Package
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Administrator Modal -->
-    <div id="administratorModal" class="modal fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
-        <div class="modal-content bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <div class="flex justify-between items-center mb-4">
-                <h3 id="administratorModalTitle" class="text-lg font-bold text-gray-900">Add Administrator</h3>
-                <button id="closeAdministratorModal" class="text-gray-400 hover:text-gray-600">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-            
-            <form id="administratorForm">
-                <div class="mb-4">
-                    <label class="block text-gray-700 text-sm font-bold mb-2">Username *</label>
-                    <input type="text" id="adminUsername" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required minlength="3">
-                </div>
-                
-                <div class="mb-4">
-                    <label class="block text-gray-700 text-sm font-bold mb-2">Email *</label>
-                    <input type="email" id="adminEmail" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
-                </div>
-                
-                <div class="mb-6">
-                    <label class="block text-gray-700 text-sm font-bold mb-2">Password *</label>
-                    <input type="password" id="adminPassword" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required minlength="8">
-                    <p class="text-sm text-gray-600 mt-1">Minimum 8 characters required</p>
-                </div>
-                
-                <div class="flex space-x-3">
-                    <button type="button" id="cancelAdministrator" class="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 font-bold py-2 px-4 rounded-lg transition duration-200">
-                        Cancel
-                    </button>
-                    <button type="submit" id="saveAdministrator" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition duration-200">
-                        Create Administrator
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Router Configuration Wizard Modal -->
-    <div id="routerModal" class="modal fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
-        <div class="modal-content bg-white rounded-lg p-6 max-w-2xl w-full mx-4">
-            <div class="flex justify-between items-center mb-6">
-                <h3 id="routerModalTitle" class="text-2xl font-bold text-gray-900">Add Router</h3>
-                <button id="closeRouterModal" class="text-gray-500 hover:text-gray-700">
-                    <i class="fas fa-times text-2xl"></i>
-                </button>
-            </div>
-            
-            <!-- Step Indicator -->
-            <div class="mb-8">
-                <div class="flex items-center justify-between">
-                    <div class="flex items-center">
-                        <div id="step1Indicator" class="flex items-center justify-center w-8 h-8 bg-blue-600 text-white rounded-full text-sm font-medium">1</div>
-                        <span class="ml-2 text-sm font-medium text-gray-900">Basic Info</span>
-                    </div>
-                    <div class="flex-1 mx-4 h-1 bg-gray-200 rounded">
-                        <div id="step1Progress" class="h-1 bg-blue-600 rounded" style="width: 0%"></div>
-                    </div>
-                    <div class="flex items-center">
-                        <div id="step2Indicator" class="flex items-center justify-center w-8 h-8 bg-gray-200 text-gray-600 rounded-full text-sm font-medium">2</div>
-                        <span class="ml-2 text-sm font-medium text-gray-600">API Credentials</span>
-                    </div>
-                    <div class="flex-1 mx-4 h-1 bg-gray-200 rounded">
-                        <div id="step2Progress" class="h-1 bg-blue-600 rounded" style="width: 0%"></div>
-                    </div>
-                    <div class="flex items-center">
-                        <div id="step3Indicator" class="flex items-center justify-center w-8 h-8 bg-gray-200 text-gray-600 rounded-full text-sm font-medium">3</div>
-                        <span class="ml-2 text-sm font-medium text-gray-600">Test & Save</span>
-                    </div>
-                </div>
-            </div>
-
-            <form id="routerForm">
-                <!-- Step 1: Basic Information -->
-                <div id="routerStep1" class="step-content active">
-                    <h4 class="text-lg font-semibold text-gray-900 mb-4">Router Basic Information</h4>
-                    
-                    <div class="mb-4">
-                        <label class="block text-gray-700 text-sm font-bold mb-2">Router Name *</label>
-                        <input type="text" id="routerName" name="name" required
-                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                               placeholder="e.g., Main Router, Office Router">
-                        <p class="text-sm text-gray-600 mt-1">A descriptive name for this router</p>
-                    </div>
-
-                    <div class="mb-6">
-                        <label class="block text-gray-700 text-sm font-bold mb-2">IP Address *</label>
-                        <input type="text" id="routerIpAddress" name="ipAddress" required
-                               pattern="^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$"
-                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                               placeholder="192.168.1.1">
-                        <p class="text-sm text-gray-600 mt-1">The IP address of your MikroTik router</p>
-                    </div>
-                </div>
-
-                <!-- Step 2: API Credentials -->
-                <div id="routerStep2" class="step-content">
-                    <h4 class="text-lg font-semibold text-gray-900 mb-4">API Credentials</h4>
-                    
-                    <div class="mb-4">
-                        <label class="block text-gray-700 text-sm font-bold mb-2">API Username *</label>
-                        <input type="text" id="routerApiUsername" name="apiUsername" required
-                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                               placeholder="api-user">
-                        <p class="text-sm text-gray-600 mt-1">Create a dedicated API user (not admin)</p>
-                    </div>
-
-                    <div class="mb-4">
-                        <label class="block text-gray-700 text-sm font-bold mb-2">API Password *</label>
-                        <div class="relative">
-                            <input type="password" id="routerApiPassword" name="apiPassword" required
-                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                   placeholder="Enter API password">
-                            <button type="button" id="toggleRouterPassword" class="absolute inset-y-0 right-0 pr-3 flex items-center">
-                                <i class="fas fa-eye text-gray-400"></i>
-                            </button>
-                        </div>
-                    </div>
-
-                    <div class="mb-6">
-                        <label class="block text-gray-700 text-sm font-bold mb-2">API Port</label>
-                        <input type="number" id="routerApiPort" name="apiPort" value="8729" min="1" max="65535"
-                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        <p class="text-sm text-gray-600 mt-1">Default: 8729 (API-SSL)</p>
-                    </div>
-                </div>
-
-                <!-- Step 3: Test & Save -->
-                <div id="routerStep3" class="step-content">
-                    <h4 class="text-lg font-semibold text-gray-900 mb-4">Review & Test Connection</h4>
-                    
-                    <div class="bg-gray-50 rounded-lg p-4 mb-6">
-                        <h5 class="font-medium text-gray-900 mb-3">Configuration Summary</h5>
-                        <div class="grid grid-cols-2 gap-4 text-sm">
-                            <div>
-                                <span class="text-gray-600">Name:</span>
-                                <span id="summaryName" class="ml-2 font-medium">-</span>
-                            </div>
-                            <div>
-                                <span class="text-gray-600">IP Address:</span>
-                                <span id="summaryIpAddress" class="ml-2 font-medium">-</span>
-                            </div>
-                            <div>
-                                <span class="text-gray-600">API Username:</span>
-                                <span id="summaryApiUsername" class="ml-2 font-medium">-</span>
-                            </div>
-                            <div>
-                                <span class="text-gray-600">API Port:</span>
-                                <span id="summaryApiPort" class="ml-2 font-medium">-</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div id="connectionTestResult" class="hidden mb-6"></div>
-
-                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-                        <div class="flex">
-                            <div class="flex-shrink-0">
-                                <i class="fas fa-info-circle text-blue-400"></i>
-                            </div>
-                            <div class="ml-3">
-                                <h3 class="text-sm font-medium text-blue-800">Security Note</h3>
-                                <div class="mt-2 text-sm text-blue-700">
-                                    <p>Router credentials are encrypted and stored securely. Only authorized administrators can access router management functions.</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Navigation Buttons -->
-                <div class="flex justify-between pt-6">
-                    <button type="button" id="routerPrevButton" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg transition duration-200 hidden">
-                        <i class="fas fa-arrow-left mr-2"></i>Previous
-                    </button>
-                    
-                    <div class="flex space-x-3">
-                        <button type="button" id="routerNextButton" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition duration-200">
-                            Next<i class="fas fa-arrow-right ml-2"></i>
-                        </button>
-                        
-                        <button type="button" id="testConnectionButton" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition duration-200 hidden">
-                            <i class="fas fa-plug mr-2"></i>Test Connection
-                        </button>
-                        
-                        <button type="submit" id="saveRouter" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition duration-200 hidden">
-                            <i class="fas fa-save mr-2"></i>Save Router
-                        </button>
-                    </div>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <script src="/admin.js"></script>
+    <script src="admin.js"></script>
 </body>
 </html>

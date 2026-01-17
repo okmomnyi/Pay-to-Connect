@@ -1,66 +1,47 @@
-import { Router } from 'express';
-import { join } from 'path';
-import rateLimit from 'express-rate-limit';
-import AdminController from '../controllers/adminController';
-import RouterController from '../controllers/routerController';
-import { authenticateToken } from '../middleware/auth';
-import rbacMiddleware from '../middleware/rbac';
+import express from 'express';
+import { authenticateAdmin, requirePermission, requireAnyPermission } from '../middleware/adminAuth';
+import * as authController from '../controllers/adminAuthController';
+import * as dashboardController from '../controllers/adminDashboardController';
+import * as adminUsersController from '../controllers/adminUsersController';
+import * as routersController from '../controllers/adminRoutersController';
 
-const router = Router();
-const adminController = new AdminController();
+const router = express.Router();
 
-const adminAuthLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 3,
-    message: {
-        success: false,
-        error: 'Too many admin login attempts, please try again later'
-    },
-    standardHeaders: true,
-    legacyHeaders: false,
-});
+// =====================================================
+// PUBLIC ROUTES (No authentication required)
+// =====================================================
+router.post('/auth/login', authController.login);
 
-// Serve admin login page
-router.get('/', (req, res) => {
-    res.sendFile(join(__dirname, '../../public/admin.html'));
-});
+// =====================================================
+// AUTHENTICATED ROUTES (All routes below require authentication)
+// =====================================================
+router.use(authenticateAdmin);
 
-// Public admin endpoints
-router.post('/login', adminAuthLimiter, adminController.login);
+// Auth routes
+router.post('/auth/logout', authController.logout);
+router.get('/auth/me', authController.getCurrentAdmin);
 
-// Protected admin endpoints - apply authentication to specific routes
-router.get('/dashboard', authenticateToken, adminController.getDashboard);
+// Dashboard routes
+router.get('/dashboard/stats', requireAnyPermission(['admin.view', 'user.view']), dashboardController.getDashboardStats);
+router.get('/dashboard/activity', requirePermission('audit.view'), dashboardController.getRecentActivity);
 
-// Package management (requires package access)
-router.get('/packages', authenticateToken, rbacMiddleware.requireReadAccess('package'), adminController.getPackages);
-router.post('/packages', authenticateToken, rbacMiddleware.requirePackageAccess(), adminController.createPackage);
-router.put('/packages/:id', authenticateToken, rbacMiddleware.requirePackageAccess(), adminController.updatePackage);
-router.delete('/packages/:id', authenticateToken, rbacMiddleware.requirePackageAccess(), adminController.deletePackage);
+// Admin users management routes
+router.get('/admins', requirePermission('admin.view'), adminUsersController.getAllAdmins);
+router.get('/admins/:id', requirePermission('admin.view'), adminUsersController.getAdminById);
+router.post('/admins', requirePermission('admin.create'), adminUsersController.createAdmin);
+router.put('/admins/:id', requirePermission('admin.edit'), adminUsersController.updateAdmin);
+router.delete('/admins/:id', requirePermission('admin.delete'), adminUsersController.deleteAdmin);
+router.get('/roles', requirePermission('admin.view'), adminUsersController.getAllRoles);
 
-// Router management (requires router access - SECURE)
-router.get('/routers', authenticateToken, rbacMiddleware.requireReadAccess('router'), RouterController.getRouters);
-router.post('/routers', authenticateToken, rbacMiddleware.requireRouterAccess(), RouterController.createRouter);
-router.put('/routers/:id', authenticateToken, rbacMiddleware.requireRouterAccess(), RouterController.updateRouter);
-router.delete('/routers/:id', authenticateToken, rbacMiddleware.requireRouterAccess(), RouterController.deleteRouter);
-
-// Router operations (WHITELISTED OPERATIONS ONLY)
-router.post('/routers/:id/test-connection', authenticateToken, rbacMiddleware.requireRouterAccess(), RouterController.testRouterConnection);
-router.post('/routers/:id/sync-packages', authenticateToken, rbacMiddleware.requireRouterAccess(), RouterController.syncPackagesToRouter);
-router.get('/routers/:id/stats', authenticateToken, rbacMiddleware.requireReadAccess('router'), RouterController.getRouterStats);
-
-// Session and payment monitoring (requires read access)
-router.get('/sessions', authenticateToken, rbacMiddleware.requireReadAccess('session'), adminController.getSessions);
-router.get('/payments', authenticateToken, rbacMiddleware.requireReadAccess('payment'), adminController.getPayments);
-router.post('/payments/:id/approve', authenticateToken, rbacMiddleware.requireAnyPermission(['payment.manage', 'system.*']), adminController.approvePayment);
-
-// Administrator management (requires admin access - HIGHEST PRIVILEGE)
-router.get('/administrators', authenticateToken, rbacMiddleware.requireAdminAccess(), adminController.getAdministrators);
-router.post('/administrators', authenticateToken, rbacMiddleware.requireAdminAccess(), adminController.createAdministrator);
-router.put('/administrators/:id', authenticateToken, rbacMiddleware.requireAdminAccess(), adminController.updateAdministrator);
-router.delete('/administrators/:id', authenticateToken, rbacMiddleware.requireAdminAccess(), adminController.deleteAdministrator);
-
-// Audit logs (requires admin access)
-router.get('/audit-logs', authenticateToken, rbacMiddleware.requireAdminAccess(), adminController.getAuditLogs);
-router.get('/security-events', authenticateToken, rbacMiddleware.requireAdminAccess(), adminController.getSecurityEvents);
+// Routers management routes
+router.get('/routers', requirePermission('router.view'), routersController.getAllRouters);
+router.get('/routers/:id', requirePermission('router.view'), routersController.getRouterById);
+router.post('/routers', requirePermission('router.create'), routersController.createRouter);
+router.put('/routers/:id', requirePermission('router.edit'), routersController.updateRouter);
+router.delete('/routers/:id', requirePermission('router.delete'), routersController.deleteRouter);
+router.post('/routers/:id/test', requirePermission('router.view'), routersController.testRouterConnection);
+router.post('/routers/:id/sync', requirePermission('router.sync'), routersController.syncRouterPackages);
+router.post('/routers/:id/disconnect', requirePermission('router.disconnect'), routersController.disconnectUserSession);
+router.get('/routers/:id/logs', requirePermission('audit.view'), routersController.getRouterLogs);
 
 export default router;
