@@ -152,7 +152,13 @@ class Server {
         this.app.use('/api/user', userRoutes);
 
         // Serve static files (CSS, JS, images) from public directory
-        this.app.use(express.static(join(__dirname, '../public')));
+        this.app.use(express.static(join(__dirname, '../public'), {
+            setHeaders: (res, path) => {
+                if (path.endsWith('.js')) {
+                    res.setHeader('Content-Type', 'application/javascript');
+                }
+            }
+        }));
 
         // Login page route
         this.app.get('/login', (req, res) => {
