@@ -1,8 +1,11 @@
-import { RouterOSAPI } from 'node-routeros';
+const RouterOSAPI = require('node-routeros-v2').RouterOSAPI;
 import DatabaseConnection from '../database/connection';
 import encryptionService from '../utils/encryption';
 import auditService from './auditService';
 import { logger } from '../utils/logger';
+
+// Use any type for RouterOSAPI to avoid TypeScript issues with the library
+type RouterOSAPIType = any;
 
 interface RouterCredentials {
     id: string;
@@ -56,7 +59,7 @@ class MikroTikService {
         }
     }
 
-    private async connectToRouter(routerId: string): Promise<RouterOSAPI | null> {
+    private async connectToRouter(routerId: string): Promise<any | null> {
         try {
             const credentials = await this.getRouterCredentials(routerId);
             
@@ -101,7 +104,7 @@ class MikroTikService {
 
     async testConnection(routerId: string, adminUserId: string): Promise<{ success: boolean; message: string; details?: any }> {
         const startTime = Date.now();
-        let api: RouterOSAPI | null = null;
+        let api: any | null = null;
 
         try {
             api = await this.connectToRouter(routerId);
@@ -183,7 +186,7 @@ class MikroTikService {
         user: HotspotUser
     ): Promise<{ success: boolean; message: string }> {
         const startTime = Date.now();
-        let api: RouterOSAPI | null = null;
+        let api: any | null = null;
 
         try {
             api = await this.connectToRouter(routerId);
@@ -254,7 +257,7 @@ class MikroTikService {
         username: string
     ): Promise<{ success: boolean; message: string }> {
         const startTime = Date.now();
-        let api: RouterOSAPI | null = null;
+        let api: any | null = null;
 
         try {
             api = await this.connectToRouter(routerId);
@@ -332,7 +335,7 @@ class MikroTikService {
         username: string
     ): Promise<{ success: boolean; message: string }> {
         const startTime = Date.now();
-        let api: RouterOSAPI | null = null;
+        let api: any | null = null;
 
         try {
             api = await this.connectToRouter(routerId);
@@ -409,7 +412,7 @@ class MikroTikService {
         adminUserId: string
     ): Promise<{ success: boolean; message: string; synced?: number }> {
         const startTime = Date.now();
-        let api: RouterOSAPI | null = null;
+        let api: any | null = null;
 
         try {
             api = await this.connectToRouter(routerId);
@@ -534,7 +537,7 @@ class MikroTikService {
     }
 
     async getActiveSessions(routerId: string): Promise<any[]> {
-        let api: RouterOSAPI | null = null;
+        let api: any | null = null;
 
         try {
             api = await this.connectToRouter(routerId);

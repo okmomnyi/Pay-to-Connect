@@ -2,7 +2,7 @@ import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import PortalController from '../controllers/portalController';
 import { validateMpesaCallback, preventDuplicateCallback } from '../middleware/mpesaAuth';
-import { authenticateUser } from '../middleware/auth';
+import { authenticateUser } from '../middleware/userAuth';
 
 const router = Router();
 const portalController = new PortalController();

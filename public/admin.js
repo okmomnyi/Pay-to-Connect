@@ -30,17 +30,21 @@ document.getElementById('login-form')?.addEventListener('submit', async (e) => {
         
         const data = await response.json();
         
+        console.log('Login response:', data);
+        
         if (data.success) {
             authToken = data.token;
             currentAdmin = data.admin;
             localStorage.setItem('admin_token', authToken);
             localStorage.setItem('admin_user', JSON.stringify(currentAdmin));
             
+            showToast('Login successful!', 'success');
             showAdminPanel();
         } else {
             showToast(data.error || 'Login failed', 'error');
         }
     } catch (error) {
+        console.error('Login error:', error);
         showToast('Connection error. Please try again.', 'error');
     } finally {
         loginBtn.disabled = false;

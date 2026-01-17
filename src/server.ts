@@ -153,9 +153,13 @@ class Server {
 
         // Serve static files (CSS, JS, images) from public directory
         this.app.use(express.static(join(__dirname, '../public'), {
-            setHeaders: (res, path) => {
-                if (path.endsWith('.js')) {
-                    res.setHeader('Content-Type', 'application/javascript');
+            setHeaders: (res, filepath) => {
+                if (filepath.endsWith('.js')) {
+                    res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+                } else if (filepath.endsWith('.css')) {
+                    res.setHeader('Content-Type', 'text/css; charset=utf-8');
+                } else if (filepath.endsWith('.html')) {
+                    res.setHeader('Content-Type', 'text/html; charset=utf-8');
                 }
             }
         }));
