@@ -138,10 +138,9 @@ class AdminAuthService {
             await this.db.query(
                 `UPDATE admin_users 
                  SET failed_login_attempts = 0,
-                     last_login_at = CURRENT_TIMESTAMP,
-                     last_login_ip = $1
-                 WHERE id = $2`,
-                [ipAddress, admin.id]
+                     last_login = CURRENT_TIMESTAMP
+                 WHERE id = $1`,
+                [admin.id]
             );
 
             // Create session token
