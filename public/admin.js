@@ -554,13 +554,131 @@ async function deleteAdmin(adminId) {
 // =====================================================
 
 async function loadUsers() {
-    document.getElementById('users-table-body').innerHTML = 
-        '<tr><td colspan="5" class="px-6 py-4 text-center text-gray-500">User management coming soon</td></tr>';
+    try {
+        const token = localStorage.getItem('adminToken');
+        const response = await fetch('/api/admin/users', {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to load users');
+        }
+
+        const data = await response.json();
+        const users = data.users;
+
+        if (users.length === 0) {
+            document.getElementById('users-table-body').innerHTML = 
+                '<tr><td colspan="5" class="px-6 py-4 text-center text-gray-500">No users found</td></tr>';
+            return;
+        }
+
+        const tbody = document.getElementById('users-table-body');
+        tbody.innerHTML = users.map(user => `
+            <tr>
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <div class="text-sm font-medium text-gray-900">${user.username}</div>
+                    <div class="text-sm text-gray-500">${user.email}</div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <div class="text-sm text-gray-900">${user.first_name || '-'} ${user.last_name || ''}</div>
+                    <div class="text-sm text-gray-500">${user.phone || '-'}</div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${user.active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
+                        ${user.active ? 'Active' : 'Inactive'}
+                    </span>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    ${user.package_count} packages (${user.active_packages} active)
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    ${new Date(user.created_at).toLocaleDateString()}
+                </td>
+            </tr>
+        `).join('');
+    } catch (error) {
+        console.error('Error loading users:', error);
+        document.getElementById('users-table-body').innerHTML = 
+            '<tr><td colspan="5" class="px-6 py-4 text-center text-red-500">Error loading users</td></tr>';
+    }
 }
 
 async function loadPackages() {
-    document.getElementById('packages-grid').innerHTML = 
-        '<p class="text-gray-500 col-span-3">Package management coming soon</p>';
+    try {
+        const token = localStorage.getItem('adminToken');
+        const response = await fetch('/api/admin/packages', {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to load packages');
+        }
+
+        const data = await response.json();
+        const packages = data.packages;
+
+        if (packages.length === 0) {
+            document.getElementById('packages-grid').innerHTML = 
+                '<p class="text-gray-500 col-span-3">No packages found</p>';
+            return;
+        }
+
+        const grid = document.getElementById('packages-grid');
+        grid.innerHTML = packages.map(pkg => `
+            <div class="bg-white rounded-lg shadow-md p-6 border border-gray-200">
+                <div class="flex justify-between items-start mb-4">
+                    <h3 class="text-lg font-semibold text-gray-900">${pkg.name}</h3>
+                    <span class="px-2 py-1 text-xs font-semibold rounded-full ${pkg.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}">
+                        ${pkg.status}
+                    </span>
+                </div>
+                <p class="text-gray-600 text-sm mb-4">${pkg.description || 'No description'}</p>
+                <div class="space-y-2 mb-4">
+                    <div class="flex justify-between text-sm">
+                        <span class="text-gray-500">Price:</span>
+                        <span class="font-medium">KES ${pkg.price}</span>
+                    </div>
+                    <div class="flex justify-between text-sm">
+                        <span class="text-gray-500">Type:</span>
+                        <span class="font-medium">${pkg.package_type}</span>
+                    </div>
+                    ${pkg.duration_hours ? `
+                    <div class="flex justify-between text-sm">
+                        <span class="text-gray-500">Duration:</span>
+                        <span class="font-medium">${pkg.duration_hours} hours</span>
+                    </div>
+                    ` : ''}
+                    ${pkg.data_limit_mb ? `
+                    <div class="flex justify-between text-sm">
+                        <span class="text-gray-500">Data Limit:</span>
+                        <span class="font-medium">${pkg.data_limit_mb} MB</span>
+                    </div>
+                    ` : ''}
+                    <div class="flex justify-between text-sm">
+                        <span class="text-gray-500">Purchased:</span>
+                        <span class="font-medium">${pkg.purchase_count || 0} times</span>
+                    </div>
+                </div>
+                <div class="flex space-x-2">
+                    <button onclick="editPackage('${pkg.id}')" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-2 px-3 rounded transition duration-200">
+                        <i class="fas fa-edit mr-1"></i>Edit
+                    </button>
+                    <button onclick="togglePackage('${pkg.id}')" class="flex-1 ${pkg.status === 'active' ? 'bg-yellow-600 hover:bg-yellow-700' : 'bg-green-600 hover:bg-green-700'} text-white text-sm font-medium py-2 px-3 rounded transition duration-200">
+                        <i class="fas fa-${pkg.status === 'active' ? 'pause' : 'play'} mr-1"></i>${pkg.status === 'active' ? 'Disable' : 'Enable'}
+                    </button>
+                </div>
+            </div>
+        `).join('');
+    } catch (error) {
+        console.error('Error loading packages:', error);
+        document.getElementById('packages-grid').innerHTML = 
+            '<p class="text-red-500 col-span-3">Error loading packages</p>';
+    }
 }
 
 async function loadSessions() {
@@ -588,7 +706,18 @@ function searchUsers() {
 }
 
 function showAddPackageModal() {
-    showToast('Package management coming soon', 'info');
+    // TODO: Implement add package modal
+    showToast('Add package feature coming soon', 'info');
+}
+
+function editPackage(packageId) {
+    // TODO: Implement edit package modal
+    showToast(`Edit package ${packageId} feature coming soon`, 'info');
+}
+
+function togglePackage(packageId) {
+    // TODO: Implement toggle package status
+    showToast(`Toggle package ${packageId} feature coming soon`, 'info');
 }
 
 function showAddEstateModal() {
