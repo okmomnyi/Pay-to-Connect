@@ -93,7 +93,7 @@ BCRYPT_ROUNDS=12
 # M-Pesa Daraja API Configuration
 MPESA_CONSUMER_KEY=your-mpesa-consumer-key
 MPESA_CONSUMER_SECRET=your-mpesa-consumer-secret
-MPESA_SHORTCODE=174379
+MPESA_SHORTCODE=your-mpesa-shortcode
 MPESA_PASSKEY=your-mpesa-passkey
 MPESA_CALLBACK_URL=https://yourdomain.com/api/portal/mpesa/callback
 MPESA_ENVIRONMENT=production
