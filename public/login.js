@@ -81,12 +81,12 @@ class AuthManager {
             this.setLoading(true, 'login');
             this.hideMessages();
 
-            const response = await fetch('/api/user/login', {
+            const response = await fetch('/api/user/auth/login', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ username, password })
+                body: JSON.stringify({ identifier: username, password })
             });
 
             const data = await response.json();
@@ -129,12 +129,19 @@ class AuthManager {
             this.setLoading(true, 'register');
             this.hideMessages();
 
-            const response = await fetch('/api/user/register', {
+            const response = await fetch('/api/user/auth/register', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify(formData)
+                body: JSON.stringify({
+                    username: formData.username,
+                    email: formData.email,
+                    phone: formData.phone,
+                    password: formData.password,
+                    first_name: formData.firstName,
+                    last_name: formData.lastName
+                })
             });
 
             const data = await response.json();

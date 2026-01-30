@@ -347,7 +347,11 @@ class WiFiPortal {
         if (!this.checkoutRequestId) return;
 
         try {
-            const response = await fetch(`/api/portal/status/${this.checkoutRequestId}`);
+            const headers = {};
+            if (this.userToken) {
+                headers['Authorization'] = `Bearer ${this.userToken}`;
+            }
+            const response = await fetch(`/api/portal/status/${this.checkoutRequestId}`, { headers });
             const data = await response.json();
 
             if (!data.success) {
@@ -449,7 +453,11 @@ class WiFiPortal {
 
     async checkExistingSession() {
         try {
-            const response = await fetch(`/api/portal/device/${encodeURIComponent(this.macAddress)}`);
+            const headers = {};
+            if (this.userToken) {
+                headers['Authorization'] = `Bearer ${this.userToken}`;
+            }
+            const response = await fetch(`/api/portal/device/${encodeURIComponent(this.macAddress)}`, { headers });
             const data = await response.json();
 
             if (data.success && data.hasActiveSession && data.session) {
@@ -459,6 +467,34 @@ class WiFiPortal {
         } catch (error) {
             console.error('Error checking existing session:', error);
             // Continue with normal flow
+        }
+    }
+
+    recoverPendingPayment() {
+        try {
+            const pendingPayment = localStorage.getItem('pendingPayment');
+            if (pendingPayment) {
+                const payment = JSON.parse(pendingPayment);
+                // Check if payment is less than 10 minutes old
+                if (Date.now() - payment.timestamp < 600000) {
+                    this.checkoutRequestId = payment.checkoutRequestId;
+                    
+                    // Update pending payment display
+                    const pendingAmount = document.getElementById('pendingAmount');
+                    const pendingPackage = document.getElementById('pendingPackage');
+                    if (pendingAmount) pendingAmount.textContent = `KES ${payment.amount}`;
+                    if (pendingPackage) pendingPackage.textContent = payment.packageName;
+                    
+                    this.showPaymentStatus('pending');
+                    this.startStatusCheck();
+                } else {
+                    // Payment expired, clear it
+                    localStorage.removeItem('pendingPayment');
+                }
+            }
+        } catch (error) {
+            console.error('Error recovering pending payment:', error);
+            localStorage.removeItem('pendingPayment');
         }
     }
 }
