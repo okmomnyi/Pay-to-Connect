@@ -8,7 +8,10 @@
     "vercel-build": "tsc && cp -r public dist/",
     "start": "node dist/server.js",
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
-    "migrate": "node dist/database/migrate.js",
+    "migrate": "ts-node src/database/migrate.ts",
+    "fix:database": "ts-node scripts/fix-database.ts",
+    "fix:admin": "ts-node scripts/fix-admin.ts",
+    "fix:all": "npm run fix:database && npm run fix:admin",
     "test": "jest"
   },
   "keywords": [
