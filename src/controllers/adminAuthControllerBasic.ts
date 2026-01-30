@@ -2,13 +2,23 @@ import { Request, Response } from 'express';
 import pool from '../database/db';
 import bcrypt from 'bcrypt';
 import { logger } from '../utils/logger';
+import fs from 'fs';
 
 export const login = async (req: Request, res: Response): Promise<void> => {
     try {
         const { username, password } = req.body;
         
-        console.log('=== BASIC ADMIN LOGIN ===');
-        console.log('Username:', username);
+        const logMessage = `=== BASIC ADMIN LOGIN ===\nUsername: ${username}\nTimestamp: ${new Date().toISOString()}`;
+        
+        console.log(logMessage);
+        logger.info(logMessage);
+        
+        // Also write to a file for debugging
+        try {
+            fs.appendFileSync('admin-login-debug.log', logMessage + '\n\n');
+        } catch (fileError) {
+            // Ignore file write errors
+        }
 
         if (!username || !password) {
             console.log('Missing credentials');
@@ -20,6 +30,10 @@ export const login = async (req: Request, res: Response): Promise<void> => {
         }
 
         // Query admin user
+        const queryLog = `Executing query for user: ${username}`;
+        console.log(queryLog);
+        logger.info(queryLog);
+        
         const result = await pool.query(
             `SELECT au.* 
              FROM admin_users au
@@ -27,7 +41,15 @@ export const login = async (req: Request, res: Response): Promise<void> => {
             [username]
         );
         
-        console.log('Found users:', result.rows.length);
+        const resultLog = `Query result: Found ${result.rows.length} users`;
+        console.log(resultLog);
+        logger.info(resultLog);
+        
+        try {
+            fs.appendFileSync('admin-login-debug.log', resultLog + '\n');
+        } catch (fileError) {
+            // Ignore file write errors
+        }
         
         if (result.rows.length === 0) {
             console.log('User not found');
