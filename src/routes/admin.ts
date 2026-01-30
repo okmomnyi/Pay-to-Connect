@@ -1,6 +1,6 @@
 import express from 'express';
 import { authenticateAdmin, requirePermission, requireAnyPermission } from '../middleware/adminAuthSimple';
-import * as authController from '../controllers/adminAuthControllerSimple';
+import * as authController from '../controllers/adminAuthControllerDebug';
 import * as dashboardController from '../controllers/adminDashboardController';
 import * as adminUsersController from '../controllers/adminUsersController';
 import * as routersController from '../controllers/adminRoutersController';
