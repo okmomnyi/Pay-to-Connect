@@ -51,7 +51,12 @@
                 <!-- User Info -->
                 <div id="userInfo" class="hidden mt-4 bg-white bg-opacity-10 rounded-lg p-3">
                     <p class="text-sm text-blue-100">Welcome, <span id="userName" class="text-white font-medium"></span></p>
-                    <button id="logoutBtn" class="text-xs text-blue-200 hover:text-white underline mt-1">Logout</button>
+                    <div class="flex space-x-3 mt-2">
+                        <a href="/profile" class="text-xs text-blue-200 hover:text-white underline">
+                            <i class="fas fa-user mr-1"></i>Profile
+                        </a>
+                        <button id="logoutBtn" class="text-xs text-blue-200 hover:text-white underline">Logout</button>
+                    </div>
                 </div>
                 
                 <!-- Login Required Message -->

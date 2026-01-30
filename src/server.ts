@@ -13,6 +13,9 @@ import { sanitizeInput, validateNoSQLInjection } from './middleware/sanitize';
 import portalRoutes from './routes/portal';
 import adminRoutes from './routes/admin';
 import userRoutes from './routes/userRoutes';
+import profileRoutes from './routes/profileRoutes';
+import adminProfileRoutes from './routes/adminProfileRoutes';
+import publicRoutes from './routes/publicRoutes';
 
 // Load environment variables
 dotenv.config();
@@ -149,7 +152,10 @@ class Server {
         // API routes (must be before catch-all routes)
         this.app.use('/api/portal', portalRoutes);
         this.app.use('/api/admin', adminRoutes);
+        this.app.use('/api/admin/profile', adminProfileRoutes);
         this.app.use('/api/user', userRoutes);
+        this.app.use('/api/user/profile', profileRoutes);
+        this.app.use('/api/public', publicRoutes);
 
         // Serve static files (CSS, JS, images) from public directory
         this.app.use(express.static(join(__dirname, '../public'), {
@@ -167,6 +173,16 @@ class Server {
         // Login page route
         this.app.get('/login', (req, res) => {
             res.sendFile(join(__dirname, '../public/login.html'));
+        });
+
+        // Forgot password page route
+        this.app.get('/forgot-password', (req, res) => {
+            res.sendFile(join(__dirname, '../public/forgot-password.html'));
+        });
+
+        // Profile page route
+        this.app.get('/profile', (req, res) => {
+            res.sendFile(join(__dirname, '../public/profile-enhanced.html'));
         });
 
         // Portal page route
