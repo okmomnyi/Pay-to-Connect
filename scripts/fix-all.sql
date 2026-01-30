@@ -32,7 +32,28 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS last_name VARCHAR(100);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS active BOOLEAN DEFAULT true;
 
 -- =====================================================
--- PART 2: FIX ADMIN USER
+-- PART 2: CREATE REQUIRED FUNCTIONS
+-- =====================================================
+
+-- Function to get admin permissions
+CREATE OR REPLACE FUNCTION get_admin_permissions(user_id UUID)
+RETURNS JSONB AS $$
+DECLARE
+    all_permissions JSONB := '[]'::JSONB;
+BEGIN
+    SELECT COALESCE(jsonb_agg(DISTINCT perm), '[]'::JSONB)
+    INTO all_permissions
+    FROM admin_user_roles aur
+    JOIN admin_roles ar ON aur.role_id = ar.id,
+    jsonb_array_elements_text(ar.permissions) perm
+    WHERE aur.admin_user_id = user_id;
+    
+    RETURN all_permissions;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- =====================================================
+-- PART 3: FIX ADMIN USER
 -- =====================================================
 
 -- Reset admin password to 'Admin@123456' (bcrypt hash with 12 rounds)
