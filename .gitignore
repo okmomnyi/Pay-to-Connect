@@ -286,3 +286,6 @@ src/database/seed-data.sql
 # Generated Admin Setup Files
 admin-credentials.txt
 setup-output.log
+
+# Screenshots
+screenshots/
