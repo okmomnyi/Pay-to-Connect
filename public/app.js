@@ -83,6 +83,15 @@ class WiFiPortal {
         if (logoutBtn) {
             logoutBtn.addEventListener('click', () => this.logout());
         }
+        
+        // Profile link
+        const profileLink = document.querySelector('#userInfo a[href="/profile"]');
+        if (profileLink) {
+            profileLink.addEventListener('click', (e) => {
+                e.preventDefault();
+                window.location.href = '/profile';
+            });
+        }
     }
 
     checkAuthentication() {

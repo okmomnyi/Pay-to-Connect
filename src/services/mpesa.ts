@@ -100,7 +100,7 @@ class MpesaService {
         if (cleaned.startsWith('0')) {
             cleaned = '254' + cleaned.slice(1);
         } else if (cleaned.startsWith('+254')) {
-            cleaned = cleaned.slice(1);
+            cleaned = '254' + cleaned.slice(3);
         } else if (cleaned.startsWith('254')) {
             // Already in correct format
         } else if (cleaned.length === 9) {
@@ -160,14 +160,17 @@ class MpesaService {
             const result: STKPushResponse = response.data;
 
             if (result.ResponseCode === '0') {
-                // Store payment record
-                await this.db.query(
-                    `INSERT INTO payments (phone, amount, mpesa_checkout_request_id, status) 
-                     VALUES ($1, $2, $3, $4)`,
-                    [phone, amount, result.CheckoutRequestID, 'pending']
-                );
-
-                logger.info(`STK Push initiated successfully for ${phone}, CheckoutRequestID: ${result.CheckoutRequestID}`);
+                try {
+                    // Try to store payment record - handle database failure gracefully
+                    await this.db.query(
+                        `INSERT INTO payments (phone, amount, mpesa_checkout_request_id, status) 
+                         VALUES ($1, $2, $3, $4)`,
+                        [phone, amount, result.CheckoutRequestID, 'pending']
+                    );
+                    logger.info(`STK Push initiated successfully for ${phone}, CheckoutRequestID: ${result.CheckoutRequestID}`);
+                } catch (dbError) {
+                    logger.warn('Failed to store payment record in database (will continue without storing):', dbError);
+                }
                 
                 return {
                     success: true,
@@ -182,6 +185,15 @@ class MpesaService {
             }
         } catch (error) {
             logger.error('STK Push initiation failed:', error);
+            
+            // Check if error is related to database connection
+            if (error instanceof Error && (error.message.includes('ECONNREFUSED') || error.message.includes('connect'))) {
+                return {
+                    success: false,
+                    error: 'Unable to connect to database. Please try again later.'
+                };
+            }
+            
             return {
                 success: false,
                 error: 'Failed to initiate payment. Please try again.'
