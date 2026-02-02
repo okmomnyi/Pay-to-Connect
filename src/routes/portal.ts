@@ -34,7 +34,7 @@ const statusLimiter = rateLimit({
 router.get('/packages', portalController.getPackages);
 
 // Protected portal endpoints - require user authentication
-router.post('/pay', authenticateUser, paymentLimiter, portalController.initiatePayment);
+router.post('/pay', paymentLimiter, portalController.initiatePayment);
 router.post('/payment', authenticateUser, paymentLimiter, portalController.initiatePayment); // Added for API compatibility
 router.get('/status/:checkoutRequestId', authenticateUser, statusLimiter, portalController.getPaymentStatus);
 router.get('/device/:macAddress', authenticateUser, statusLimiter, portalController.getDeviceStatus);
