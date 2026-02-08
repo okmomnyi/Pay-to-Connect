@@ -140,12 +140,16 @@ npm install
 npm run migrate
 ```
 
-4. **Create admin user (SECURE):**
+4. **Initialize the database:**
 ```bash
-node scripts/setup-admin.js
+# Run the production schema
+psql -U postgres -d captiveportal -f src/database/production-schema.sql
+
+# Initialize admin user (change password immediately after first login)
+psql -U postgres -d captiveportal -f src/database/init-admin.sql
 ```
-   - Follow prompts to create admin credentials
-   - Never use hardcoded passwords
+   - Login to admin panel and change default password immediately
+   - Never use default credentials in production
 
 5. **Build and start:**
 ```bash

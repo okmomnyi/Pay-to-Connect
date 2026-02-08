@@ -13,8 +13,8 @@ ON CONFLICT (name) DO NOTHING;
 
 -- Create default admin user
 -- Username: admin
--- Password: Admin@123456 (MUST BE CHANGED IN PRODUCTION!)
--- Password hash generated with bcrypt rounds=12
+-- Password: Set a strong password in production and run: npm run create-admin
+-- The hash below is for initial setup only - CHANGE IT IMMEDIATELY
 INSERT INTO admin_users (username, email, password_hash, full_name, active) VALUES 
     ('admin', 'admin@captiveportal.local', '$2b$12$LQv3c1yqBWEHxv03kpOFQOuSiGgY4a1NOKi6oQ4Q2LhWGy/BsXbfO', 'System Administrator', true)
 ON CONFLICT (username) DO UPDATE SET 

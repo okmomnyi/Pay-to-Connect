@@ -138,10 +138,15 @@ export class AuthController {
 
             const token = await authService.generatePasswordResetToken(email);
 
+            // TODO: In production, send this token via email instead of returning it
+            // For development purposes, we log the token
+            console.log(`Password reset token for ${email}: ${token}`);
+
             res.status(200).json({
                 success: true,
-                message: 'Password reset link sent',
-                resetToken: token,
+                message: 'If an account exists with this email, a password reset link has been sent.',
+                // SECURITY: Do not return token in production - send via email instead
+                ...(process.env.NODE_ENV === 'development' && { resetToken: token })
             });
         } catch (error: any) {
             logger.error('Password reset request error:', error);

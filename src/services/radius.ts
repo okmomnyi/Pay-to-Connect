@@ -110,8 +110,11 @@ class RadiusService {
 
     private async loadRouters(): Promise<void> {
         try {
+            // Get RADIUS secret from environment
+            const radiusSecret = process.env.RADIUS_SECRET || 'radius-secret';
+
             const result = await this.db.query(
-                'SELECT id, ip_address, shared_secret FROM routers WHERE active = true'
+                'SELECT id, ip_address FROM routers WHERE active = true'
             );
 
             this.routers.clear();
@@ -119,7 +122,7 @@ class RadiusService {
                 this.routers.set(router.ip_address, {
                     id: router.id,
                     ip: router.ip_address,
-                    secret: router.shared_secret
+                    secret: radiusSecret  // Use env variable for all routers
                 });
             });
 
@@ -281,31 +284,19 @@ class RadiusService {
 
                 const durationMinutes = packageResult.rows[0].duration_minutes;
 
-                // Get router ID
-                const routerResult = await client.query(
-                    'SELECT id FROM routers WHERE ip_address = $1 AND active = true',
-                    [routerIp]
-                );
-
-                if (routerResult.rows.length === 0) {
-                    return { success: false, error: 'Router not found or inactive' };
-                }
-
-                const routerId = routerResult.rows[0].id;
-
                 // Deactivate any existing sessions for this device
                 await client.query(
                     'UPDATE sessions SET active = false WHERE device_id = $1 AND active = true',
                     [deviceId]
                 );
 
-                // Create new session
+                // Create new session with router IP
                 const endTime = new Date(Date.now() + durationMinutes * 60 * 1000);
                 const sessionResult = await client.query(`
-                    INSERT INTO sessions (device_id, package_id, payment_id, router_id, end_time)
-                    VALUES ($1, $2, $3, $4, $5)
+                    INSERT INTO sessions (device_id, package_id, payment_id, router_ip, end_time)
+                    VALUES ($1, $2, $3, $4::inet, $5)
                     RETURNING id
-                `, [deviceId, packageId, paymentId, routerId, endTime]);
+                `, [deviceId, packageId, paymentId, routerIp, endTime]);
 
                 const sessionId = sessionResult.rows[0].id;
 
@@ -328,7 +319,7 @@ class RadiusService {
             }
 
             const packet = this.parseRadiusPacket(buffer);
-            
+
             if (packet.code === this.RADIUS_CODES.ACCESS_REQUEST) {
                 return await this.handleAccessRequest(packet, router);
             } else if (packet.code === this.RADIUS_CODES.ACCOUNTING_REQUEST) {
@@ -381,9 +372,9 @@ class RadiusService {
         try {
             // For now, just acknowledge accounting requests
             // In production, you might want to log session start/stop events
-            
+
             const attributes: RadiusAttribute[] = [];
-            
+
             const responsePacket = this.createRadiusPacket(
                 this.RADIUS_CODES.ACCOUNTING_RESPONSE,
                 packet.identifier,
@@ -499,7 +490,7 @@ class RadiusService {
     public async disconnectDevice(macAddress: string): Promise<void> {
         try {
             logger.info(`Disconnecting device: ${macAddress}`);
-            
+
             // Update session to inactive
             await this.db.query(`
                 UPDATE sessions s

@@ -19,13 +19,33 @@ declare global {
     }
 }
 
+// All available permissions for super admin
+const ALL_PERMISSIONS = [
+    // Admin management
+    'admin.view', 'admin.create', 'admin.edit', 'admin.delete',
+    // User management
+    'user.view', 'user.create', 'user.edit', 'user.delete',
+    // Package management
+    'package.view', 'package.create', 'package.edit', 'package.delete',
+    // Session management
+    'session.view', 'session.disconnect',
+    // Payment management
+    'payment.view', 'payment.edit', 'payment.refund',
+    // Estate management
+    'estate.view', 'estate.create', 'estate.edit', 'estate.delete',
+    // Router management
+    'router.view', 'router.create', 'router.edit', 'router.delete', 'router.sync', 'router.disconnect',
+    // Analytics and Audit
+    'audit.view', 'analytics.view'
+];
+
 // Basic middleware that just checks for a token and creates a fake admin
 export const authenticateAdmin = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
         const token = req.headers.authorization?.replace('Bearer ', '');
-        
+
         console.log('Basic auth middleware, token:', token ? 'present' : 'missing');
-        
+
         if (!token) {
             console.log('No token provided');
             res.status(401).json({
@@ -39,10 +59,10 @@ export const authenticateAdmin = async (req: Request, res: Response, next: NextF
         try {
             const decoded = Buffer.from(token, 'base64').toString('utf-8');
             const [adminId, username] = decoded.split(':');
-            
+
             console.log('Decoded token:', { adminId, username });
-            
-            // Create a basic admin user
+
+            // Create a super admin user with all permissions
             const admin: AdminUser = {
                 id: adminId,
                 username: username,
@@ -50,16 +70,16 @@ export const authenticateAdmin = async (req: Request, res: Response, next: NextF
                 full_name: 'System Administrator',
                 active: true,
                 locked: false,
-                permissions: ['admin.view', 'user.view', 'package.view', 'session.view', 'admin.create', 'admin.edit', 'admin.delete']
+                permissions: ALL_PERMISSIONS
             };
-            
+
             req.admin = admin;
             console.log('Admin authenticated:', admin.username);
             next();
-            
+
         } catch (decodeError) {
             console.log('Token decode failed, creating default admin');
-            // If token decode fails, create a default admin
+            // If token decode fails, create a default admin with all permissions
             const admin: AdminUser = {
                 id: 'default',
                 username: 'admin',
@@ -67,13 +87,13 @@ export const authenticateAdmin = async (req: Request, res: Response, next: NextF
                 full_name: 'System Administrator',
                 active: true,
                 locked: false,
-                permissions: ['admin.view', 'user.view', 'package.view', 'session.view', 'admin.create', 'admin.edit', 'admin.delete']
+                permissions: ALL_PERMISSIONS
             };
-            
+
             req.admin = admin;
             next();
         }
-        
+
     } catch (error) {
         console.error('Auth middleware error:', error);
         res.status(401).json({

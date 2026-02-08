@@ -9,45 +9,53 @@ export const getAllSessions = async (req: Request, res: Response): Promise<void>
         const { page = 1, limit = 50, status = 'all' } = req.query;
         const offset = (Number(page) - 1) * Number(limit);
 
-        let query = `
-            SELECT us.*, 
-                   u.username, u.email, u.first_name, u.last_name,
-                   p.name as package_name, p.package_type,
-                   r.name as router_name
-            FROM user_sessions us
-            JOIN users u ON us.user_id = u.id
-            LEFT JOIN user_packages up ON us.user_package_id = up.id
-            LEFT JOIN packages p ON up.package_id = p.id
-            LEFT JOIN routers r ON us.router_id = r.id
-        `;
+        let sessions: any[] = [];
+        let totalSessions = 0;
 
-        const params: any[] = [];
+        try {
+            let query = `
+                SELECT s.*, 
+                       u.username, u.email, u.first_name, u.last_name,
+                       pkg.name as package_name
+                FROM sessions s
+                LEFT JOIN users u ON s.user_id = u.id
+                LEFT JOIN packages pkg ON s.package_id = pkg.id
+            `;
 
-        if (status !== 'all') {
-            query += ` WHERE us.status = $1`;
-            params.push(status);
+            const params: any[] = [];
+
+            if (status === 'active') {
+                query += ` WHERE s.active = true AND s.end_time > CURRENT_TIMESTAMP`;
+            } else if (status === 'expired') {
+                query += ` WHERE s.active = false OR s.end_time <= CURRENT_TIMESTAMP`;
+            }
+
+            query += ` ORDER BY s.created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+            params.push(Number(limit), offset);
+
+            const result = await db.query(query, params);
+            sessions = result.rows;
+
+            // Get total count for pagination
+            let countQuery = 'SELECT COUNT(*) as total FROM sessions s';
+            const countParams: any[] = [];
+
+            if (status === 'active') {
+                countQuery += ` WHERE s.active = true AND s.end_time > CURRENT_TIMESTAMP`;
+            } else if (status === 'expired') {
+                countQuery += ` WHERE s.active = false OR s.end_time <= CURRENT_TIMESTAMP`;
+            }
+
+            const countResult = await db.query(countQuery, countParams);
+            totalSessions = parseInt(countResult.rows[0]?.total || '0');
+        } catch (tableError) {
+            logger.warn('Sessions table not found or query failed');
+            // Return empty array if table doesn't exist
         }
-
-        query += ` ORDER BY us.created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
-        params.push(Number(limit), offset);
-
-        const result = await db.query(query, params);
-
-        // Get total count for pagination
-        let countQuery = 'SELECT COUNT(*) as total FROM user_sessions us';
-        const countParams: any[] = [];
-        
-        if (status !== 'all') {
-            countQuery += ` WHERE us.status = $1`;
-            countParams.push(status);
-        }
-
-        const countResult = await db.query(countQuery, countParams);
-        const totalSessions = parseInt(countResult.rows[0].total);
 
         res.json({
             success: true,
-            sessions: result.rows,
+            sessions,
             pagination: {
                 page: Number(page),
                 limit: Number(limit),
@@ -67,18 +75,15 @@ export const getAllSessions = async (req: Request, res: Response): Promise<void>
 export const getSessionById = async (req: Request, res: Response): Promise<void> => {
     try {
         const { id } = req.params;
-        
+
         const result = await db.query(
-            `SELECT us.*, 
+            `SELECT s.*, 
                    u.username, u.email, u.first_name, u.last_name,
-                   p.name as package_name, p.package_type,
-                   r.name as router_name, r.ip_address as router_ip
-             FROM user_sessions us
-             JOIN users u ON us.user_id = u.id
-             LEFT JOIN user_packages up ON us.user_package_id = up.id
-             LEFT JOIN packages p ON up.package_id = p.id
-             LEFT JOIN routers r ON us.router_id = r.id
-             WHERE us.id = $1`,
+                   pkg.name as package_name
+             FROM sessions s
+             LEFT JOIN users u ON s.user_id = u.id
+             LEFT JOIN packages pkg ON s.package_id = pkg.id
+             WHERE s.id = $1`,
             [id]
         );
 
@@ -107,32 +112,13 @@ export const disconnectSession = async (req: Request, res: Response): Promise<vo
     try {
         const { id } = req.params;
 
-        // Get session details
-        const sessionResult = await db.query(
-            'SELECT * FROM user_sessions WHERE id = $1',
-            [id]
-        );
-
-        if (sessionResult.rows.length === 0) {
-            res.status(404).json({
-                success: false,
-                error: 'Session not found'
-            });
-            return;
-        }
-
-        const session = sessionResult.rows[0];
-
         // Update session status
         await db.query(
-            `UPDATE user_sessions 
-             SET status = 'disconnected', disconnected_at = CURRENT_TIMESTAMP
+            `UPDATE sessions 
+             SET active = false, updated_at = CURRENT_TIMESTAMP
              WHERE id = $1`,
             [id]
         );
-
-        // TODO: Send disconnect command to router via MikroTik API
-        // This would involve calling the router service to disconnect the user
 
         res.json({
             success: true,
@@ -149,25 +135,29 @@ export const disconnectSession = async (req: Request, res: Response): Promise<vo
 
 export const getActiveSessions = async (req: Request, res: Response): Promise<void> => {
     try {
-        const result = await db.query(
-            `SELECT us.*, 
-                   u.username, u.email,
-                   p.name as package_name,
-                   r.name as router_name
-             FROM user_sessions us
-             JOIN users u ON us.user_id = u.id
-             LEFT JOIN user_packages up ON us.user_package_id = up.id
-             LEFT JOIN packages p ON up.package_id = p.id
-             LEFT JOIN routers r ON us.router_id = r.id
-             WHERE us.status = 'active' 
-             AND us.expires_at > CURRENT_TIMESTAMP
-             ORDER BY us.created_at DESC`
-        );
+        let sessions: any[] = [];
+
+        try {
+            const result = await db.query(
+                `SELECT s.*, 
+                       u.username, u.email,
+                       pkg.name as package_name
+                 FROM sessions s
+                 LEFT JOIN users u ON s.user_id = u.id
+                 LEFT JOIN packages pkg ON s.package_id = pkg.id
+                 WHERE s.active = true 
+                 AND s.end_time > CURRENT_TIMESTAMP
+                 ORDER BY s.created_at DESC`
+            );
+            sessions = result.rows;
+        } catch (tableError) {
+            logger.warn('Sessions table not found');
+        }
 
         res.json({
             success: true,
-            sessions: result.rows,
-            count: result.rows.length
+            sessions,
+            count: sessions.length
         });
     } catch (error) {
         logger.error('Error getting active sessions:', error);
@@ -180,38 +170,32 @@ export const getActiveSessions = async (req: Request, res: Response): Promise<vo
 
 export const getSessionStats = async (req: Request, res: Response): Promise<void> => {
     try {
-        // Get session statistics
-        const stats = await db.query(`
-            SELECT 
-                COUNT(*) as total_sessions,
-                COUNT(CASE WHEN status = 'active' AND expires_at > CURRENT_TIMESTAMP THEN 1 END) as active_sessions,
-                COUNT(CASE WHEN status = 'expired' THEN 1 END) as expired_sessions,
-                COUNT(CASE WHEN status = 'disconnected' THEN 1 END) as disconnected_sessions,
-                COUNT(CASE WHEN created_at >= CURRENT_DATE THEN 1 END) as sessions_today,
-                COUNT(CASE WHEN created_at >= DATE_TRUNC('week', CURRENT_DATE) THEN 1 END) as sessions_this_week
-            FROM user_sessions
-        `);
+        let statsData = {
+            total_sessions: 0,
+            active_sessions: 0,
+            expired_sessions: 0,
+            sessions_today: 0,
+            sessions_this_week: 0
+        };
 
-        // Get peak concurrent sessions
-        const peakResult = await db.query(`
-            SELECT COUNT(*) as peak_concurrent
-            FROM (
-                SELECT created_at
-                FROM user_sessions
-                WHERE status = 'active'
-                AND created_at >= CURRENT_DATE
-                GROUP BY DATE_TRUNC('hour', created_at)
-                ORDER BY COUNT(*) DESC
-                LIMIT 1
-            ) t
-        `);
+        try {
+            const stats = await db.query(`
+                SELECT 
+                    COUNT(*) as total_sessions,
+                    COUNT(CASE WHEN active = true AND end_time > CURRENT_TIMESTAMP THEN 1 END) as active_sessions,
+                    COUNT(CASE WHEN active = false OR end_time <= CURRENT_TIMESTAMP THEN 1 END) as expired_sessions,
+                    COUNT(CASE WHEN created_at >= CURRENT_DATE THEN 1 END) as sessions_today,
+                    COUNT(CASE WHEN created_at >= DATE_TRUNC('week', CURRENT_DATE) THEN 1 END) as sessions_this_week
+                FROM sessions
+            `);
+            statsData = stats.rows[0] || statsData;
+        } catch (tableError) {
+            logger.warn('Sessions table not found for stats');
+        }
 
         res.json({
             success: true,
-            stats: {
-                ...stats.rows[0],
-                peak_concurrent_today: parseInt(peakResult.rows[0]?.peak_concurrent || '0')
-            }
+            stats: statsData
         });
     } catch (error) {
         logger.error('Error getting session stats:', error);

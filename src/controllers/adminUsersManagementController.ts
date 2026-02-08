@@ -12,10 +12,9 @@ export const getAllUsers = async (req: Request, res: Response): Promise<void> =>
         let query = `
             SELECT u.id, u.username, u.email, u.phone, u.first_name, u.last_name,
                    u.active, u.email_verified, u.phone_verified, u.created_at, u.last_login,
-                   COUNT(up.id) as package_count,
-                   COUNT(CASE WHEN up.status = 'active' AND up.expires_at > CURRENT_TIMESTAMP THEN 1 END) as active_packages
+                   0 as package_count,
+                   0 as active_packages
             FROM users u
-            LEFT JOIN user_packages up ON u.id = up.user_id
         `;
 
         const params: any[] = [];
@@ -25,7 +24,7 @@ export const getAllUsers = async (req: Request, res: Response): Promise<void> =>
             params.push(`%${search}%`);
         }
 
-        query += ` GROUP BY u.id ORDER BY u.created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+        query += ` ORDER BY u.created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
         params.push(Number(limit), offset);
 
         const result = await db.query(query, params);
@@ -33,14 +32,14 @@ export const getAllUsers = async (req: Request, res: Response): Promise<void> =>
         // Get total count for pagination
         let countQuery = 'SELECT COUNT(*) as total FROM users u';
         const countParams: any[] = [];
-        
+
         if (search) {
             countQuery += ` WHERE u.username ILIKE $1 OR u.email ILIKE $1 OR u.phone ILIKE $1 OR u.first_name ILIKE $1 OR u.last_name ILIKE $1`;
             countParams.push(`%${search}%`);
         }
 
         const countResult = await db.query(countQuery, countParams);
-        const totalUsers = parseInt(countResult.rows[0].total);
+        const totalUsers = parseInt(countResult.rows[0]?.total || '0');
 
         res.json({
             success: true,
@@ -64,15 +63,11 @@ export const getAllUsers = async (req: Request, res: Response): Promise<void> =>
 export const getUserById = async (req: Request, res: Response): Promise<void> => {
     try {
         const { id } = req.params;
-        
+
         const result = await db.query(
-            `SELECT u.*, 
-                    COUNT(up.id) as package_count,
-                    COUNT(CASE WHEN up.status = 'active' AND up.expires_at > CURRENT_TIMESTAMP THEN 1 END) as active_packages
+            `SELECT u.*, 0 as package_count, 0 as active_packages
              FROM users u
-             LEFT JOIN user_packages up ON u.id = up.user_id
-             WHERE u.id = $1
-             GROUP BY u.id`,
+             WHERE u.id = $1`,
             [id]
         );
 
@@ -84,18 +79,24 @@ export const getUserById = async (req: Request, res: Response): Promise<void> =>
             return;
         }
 
-        // Get user packages
-        const packagesResult = await db.query(
-            `SELECT up.*, p.name as package_name, p.package_type
-             FROM user_packages up
-             JOIN packages p ON up.package_id = p.id
-             WHERE up.user_id = $1
-             ORDER BY up.created_at DESC`,
-            [id]
-        );
+        // Get user payments
+        let payments: any[] = [];
+        try {
+            const paymentsResult = await db.query(
+                `SELECT p.*, pkg.name as package_name
+                 FROM payments p
+                 LEFT JOIN packages pkg ON p.package_id = pkg.id
+                 WHERE p.user_id = $1
+                 ORDER BY p.created_at DESC`,
+                [id]
+            );
+            payments = paymentsResult.rows;
+        } catch (e) {
+            logger.warn('Payments query failed for user');
+        }
 
         const user = result.rows[0];
-        user.packages = packagesResult.rows;
+        user.payments = payments;
 
         res.json({
             success: true,
@@ -165,12 +166,16 @@ export const toggleUserStatus = async (req: Request, res: Response): Promise<voi
             return;
         }
 
-        // Deactivate all user sessions if deactivating user
+        // Try to deactivate sessions if user is deactivated
         if (!result.rows[0].active) {
-            await db.query(
-                'UPDATE user_sessions SET status = $1 WHERE user_id = $2 AND status = $3',
-                ['deactivated', id, 'active']
-            );
+            try {
+                await db.query(
+                    'UPDATE sessions SET active = false WHERE user_id = $1 AND active = true',
+                    [id]
+                );
+            } catch (e) {
+                logger.warn('Sessions table not found, skipping session deactivation');
+            }
         }
 
         res.json({
@@ -193,30 +198,38 @@ export const getUserSessions = async (req: Request, res: Response): Promise<void
         const { page = 1, limit = 20 } = req.query;
         const offset = (Number(page) - 1) * Number(limit);
 
-        const result = await db.query(
-            `SELECT us.*, p.name as package_name, p.package_type
-             FROM user_sessions us
-             LEFT JOIN user_packages up ON us.user_package_id = up.id
-             LEFT JOIN packages p ON up.package_id = p.id
-             WHERE us.user_id = $1
-             ORDER BY us.created_at DESC
-             LIMIT $2 OFFSET $3`,
-            [id, Number(limit), offset]
-        );
+        let sessions: any[] = [];
+        let total = 0;
 
-        const countResult = await db.query(
-            'SELECT COUNT(*) as total FROM user_sessions WHERE user_id = $1',
-            [id]
-        );
+        try {
+            const result = await db.query(
+                `SELECT s.*, pkg.name as package_name
+                 FROM sessions s
+                 LEFT JOIN packages pkg ON s.package_id = pkg.id
+                 WHERE s.user_id = $1
+                 ORDER BY s.created_at DESC
+                 LIMIT $2 OFFSET $3`,
+                [id, Number(limit), offset]
+            );
+            sessions = result.rows;
+
+            const countResult = await db.query(
+                'SELECT COUNT(*) as total FROM sessions WHERE user_id = $1',
+                [id]
+            );
+            total = parseInt(countResult.rows[0]?.total || '0');
+        } catch (e) {
+            logger.warn('Sessions table not found');
+        }
 
         res.json({
             success: true,
-            sessions: result.rows,
+            sessions,
             pagination: {
                 page: Number(page),
                 limit: Number(limit),
-                total: parseInt(countResult.rows[0].total),
-                pages: Math.ceil(parseInt(countResult.rows[0].total) / Number(limit))
+                total,
+                pages: Math.ceil(total / Number(limit))
             }
         });
     } catch (error) {

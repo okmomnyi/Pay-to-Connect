@@ -19,9 +19,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 // Load user profile
 async function loadUserProfile() {
     try {
-        const token = localStorage.getItem('token');
+        const token = localStorage.getItem('authToken');
         if (!token) {
-            window.location.href = '/login';
+            window.location.href = '/user-login.html';
             return;
         }
 
@@ -50,7 +50,7 @@ async function loadUserProfile() {
 
         // Update account information
         document.getElementById('created-at').textContent = new Date(currentUser.created_at).toLocaleDateString();
-        document.getElementById('last-login').textContent = currentUser.last_login ? 
+        document.getElementById('last-login').textContent = currentUser.last_login ?
             new Date(currentUser.last_login).toLocaleString() : 'Never';
         document.getElementById('profile-completed').textContent = currentUser.profile_completed ? 'Yes' : 'No';
         document.getElementById('security-questions-set').textContent = currentUser.security_questions_set ? 'Yes' : 'No';
@@ -65,7 +65,7 @@ async function loadUserProfile() {
 async function loadSecurityQuestions() {
     try {
         const response = await fetch(`${API_BASE}/security-questions`);
-        
+
         if (!response.ok) {
             throw new Error('Failed to load security questions');
         }
@@ -102,7 +102,7 @@ function setupEventListeners() {
 // Update profile
 async function updateProfile() {
     try {
-        const token = localStorage.getItem('token');
+        const token = localStorage.getItem('authToken');
         const profileData = {
             first_name: document.getElementById('first-name').value,
             last_name: document.getElementById('last-name').value,
@@ -165,7 +165,7 @@ function closeSecurityModal() {
 // Save security questions
 async function saveSecurityQuestions() {
     try {
-        const token = localStorage.getItem('token');
+        const token = localStorage.getItem('authToken');
         const answers = [];
 
         for (let i = 0; i < 3; i++) {
@@ -220,7 +220,7 @@ function closePasswordModal() {
 // Change password
 async function changePassword() {
     try {
-        const token = localStorage.getItem('token');
+        const token = localStorage.getItem('authToken');
         const currentPassword = document.getElementById('current-password').value;
         const newPassword = document.getElementById('new-password').value;
         const confirmPassword = document.getElementById('confirm-password').value;
@@ -290,9 +290,9 @@ function showAlert(message, type) {
     const alert = document.createElement('div');
     alert.className = `alert alert-${type}`;
     alert.textContent = message;
-    
+
     container.appendChild(alert);
-    
+
     // Auto-remove after 5 seconds
     setTimeout(() => {
         alert.remove();
@@ -305,16 +305,16 @@ function goToPortal() {
 }
 
 function logout() {
-    localStorage.removeItem('token');
+    localStorage.removeItem('authToken');
     localStorage.removeItem('user');
-    window.location.href = '/login';
+    window.location.href = '/user-login.html';
 }
 
 // Close modals when clicking outside
-window.onclick = function(event) {
+window.onclick = function (event) {
     const securityModal = document.getElementById('security-modal');
     const passwordModal = document.getElementById('password-modal');
-    
+
     if (event.target === securityModal) {
         closeSecurityModal();
     }

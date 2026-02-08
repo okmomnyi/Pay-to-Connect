@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -251,11 +252,12 @@
         }
     </style>
 </head>
+
 <body>
     <div class="navbar">
         <h1>🌐 My Profile</h1>
         <div class="navbar-actions">
-            <button class="navbar-btn" onclick="window.location.href='/dashboard.html'">← Dashboard</button>
+            <button class="navbar-btn" onclick="window.location.href='/portal'">← Portal</button>
             <button class="navbar-btn" onclick="logout()">Logout</button>
         </div>
     </div>
@@ -409,12 +411,12 @@
                 if (data.success && data.history.length > 0) {
                     displayPurchaseHistory(data.history);
                 } else {
-                    document.getElementById('purchase-history').innerHTML = 
+                    document.getElementById('purchase-history').innerHTML =
                         '<p style="text-align: center; color: #6b7280; padding: 20px;">No purchase history yet</p>';
                 }
             } catch (error) {
                 console.error('Error loading purchase history:', error);
-                document.getElementById('purchase-history').innerHTML = 
+                document.getElementById('purchase-history').innerHTML =
                     '<p style="text-align: center; color: #6b7280; padding: 20px;">Failed to load purchase history</p>';
             }
         }
@@ -426,7 +428,7 @@
             history.forEach(item => {
                 const div = document.createElement('div');
                 div.className = 'history-item';
-                
+
                 const date = new Date(item.purchase_date).toLocaleDateString('en-US', {
                     year: 'numeric',
                     month: 'short',
@@ -442,7 +444,7 @@
                     </div>
                     <div class="history-amount">KES ${parseFloat(item.amount_paid).toFixed(2)}</div>
                 `;
-                
+
                 container.appendChild(div);
             });
         }
@@ -549,20 +551,20 @@
             } finally {
                 localStorage.removeItem('authToken');
                 localStorage.removeItem('user');
-                
+
                 // Prevent browser back button from accessing cached pages
                 window.history.pushState(null, '', window.location.href);
-                window.onpopstate = function() {
+                window.onpopstate = function () {
                     window.history.pushState(null, '', window.location.href);
                 };
-                
+
                 window.location.replace('/user-login.html');
             }
         }
 
         // Prevent back button after logout
         window.history.pushState(null, '', window.location.href);
-        window.onpopstate = function() {
+        window.onpopstate = function () {
             if (!localStorage.getItem('authToken')) {
                 window.history.pushState(null, '', window.location.href);
             }
@@ -571,4 +573,5 @@
         loadProfile();
     </script>
 </body>
+
 </html>

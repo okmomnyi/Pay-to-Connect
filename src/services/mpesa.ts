@@ -50,70 +50,134 @@ class MpesaService {
     private passkey: string;
     private callbackUrl: string;
     private db: DatabaseConnection;
+    private isConfigured: boolean = false;
 
     constructor() {
-        this.baseUrl = process.env.MPESA_ENVIRONMENT === 'production' 
-            ? 'https://api.safaricom.co.ke' 
+        this.baseUrl = process.env.MPESA_ENVIRONMENT === 'production'
+            ? 'https://api.safaricom.co.ke'
             : 'https://sandbox.safaricom.co.ke';
-        this.consumerKey = process.env.MPESA_CONSUMER_KEY!;
-        this.consumerSecret = process.env.MPESA_CONSUMER_SECRET!;
-        this.shortcode = process.env.MPESA_SHORTCODE!;
-        this.passkey = process.env.MPESA_PASSKEY!;
-        this.callbackUrl = process.env.MPESA_CALLBACK_URL!;
+        this.consumerKey = process.env.MPESA_CONSUMER_KEY || '';
+        this.consumerSecret = process.env.MPESA_CONSUMER_SECRET || '';
+        this.shortcode = process.env.MPESA_SHORTCODE || '';
+        this.passkey = process.env.MPESA_PASSKEY || '';
+        this.callbackUrl = process.env.MPESA_CALLBACK_URL || '';
         this.db = DatabaseConnection.getInstance();
+
+        // Validate M-Pesa configuration
+        this.validateConfiguration();
+    }
+
+    private validateConfiguration(): void {
+        const missing: string[] = [];
+
+        if (!this.consumerKey) missing.push('MPESA_CONSUMER_KEY');
+        if (!this.consumerSecret) missing.push('MPESA_CONSUMER_SECRET');
+        if (!this.shortcode) missing.push('MPESA_SHORTCODE');
+        if (!this.passkey) missing.push('MPESA_PASSKEY');
+        if (!this.callbackUrl) missing.push('MPESA_CALLBACK_URL');
+
+        if (missing.length > 0) {
+            logger.warn(`M-Pesa configuration incomplete. Missing: ${missing.join(', ')}`);
+            logger.warn('M-Pesa STK Push will not work until all credentials are configured.');
+            this.isConfigured = false;
+        } else {
+            logger.info('M-Pesa configuration validated successfully');
+            logger.info(`M-Pesa Environment: ${process.env.MPESA_ENVIRONMENT || 'sandbox'}`);
+            logger.info(`M-Pesa Shortcode: ${this.shortcode}`);
+            logger.info(`M-Pesa Callback URL: ${this.callbackUrl}`);
+            this.isConfigured = true;
+        }
     }
 
     private async getAccessToken(): Promise<string> {
         try {
+            if (!this.isConfigured) {
+                throw new Error('M-Pesa is not configured. Please check environment variables.');
+            }
+
             const auth = Buffer.from(`${this.consumerKey}:${this.consumerSecret}`).toString('base64');
-            
+
+            logger.info(`Requesting M-Pesa access token from ${this.baseUrl}`);
+
             const response = await axios.get(`${this.baseUrl}/oauth/v1/generate?grant_type=client_credentials`, {
                 headers: {
                     'Authorization': `Basic ${auth}`,
                     'Content-Type': 'application/json'
-                }
+                },
+                timeout: 30000 // 30 second timeout
             });
 
+            if (!response.data.access_token) {
+                logger.error('M-Pesa API returned response without access_token:', response.data);
+                throw new Error('Invalid response from M-Pesa API');
+            }
+
+            logger.info('M-Pesa access token obtained successfully');
             return response.data.access_token;
-        } catch (error) {
-            logger.error('Failed to get M-Pesa access token:', error);
-            throw new Error('Failed to authenticate with M-Pesa API');
+        } catch (error: any) {
+            logger.error('Failed to get M-Pesa access token:', {
+                message: error.message,
+                response: error.response?.data,
+                status: error.response?.status
+            });
+            throw new Error('Failed to authenticate with M-Pesa API. Please check credentials.');
         }
     }
 
     private generatePassword(): { password: string; timestamp: string } {
-        const timestamp = new Date().toISOString().replace(/[^0-9]/g, '').slice(0, -3);
+        // Format: YYYYMMDDHHmmss (14 digits)
+        const now = new Date();
+        const timestamp = now.getFullYear().toString() +
+            String(now.getMonth() + 1).padStart(2, '0') +
+            String(now.getDate()).padStart(2, '0') +
+            String(now.getHours()).padStart(2, '0') +
+            String(now.getMinutes()).padStart(2, '0') +
+            String(now.getSeconds()).padStart(2, '0');
+
         const password = Buffer.from(`${this.shortcode}${this.passkey}${timestamp}`).toString('base64');
         return { password, timestamp };
     }
 
     private validatePhoneNumber(phone: string): boolean {
         const cleanedPhone = this.formatPhoneNumber(phone);
-        return /^254[17]\d{8}$/.test(cleanedPhone);
+        // Accept Safaricom numbers: 254 + (7xx, 1xx) + 7 more digits = 12 digits total
+        // 7xx series: 700-729, 740-799 (traditional Safaricom)
+        // 1xx series: 110-119 (new Safaricom numbers)
+        return /^254(7\d{8}|1[01]\d{7})$/.test(cleanedPhone);
     }
 
     private formatPhoneNumber(phone: string): string {
         // Remove any non-digit characters
         let cleaned = phone.replace(/\D/g, '');
-        
+
         // Handle different formats
         if (cleaned.startsWith('0')) {
             cleaned = '254' + cleaned.slice(1);
         } else if (cleaned.startsWith('+254')) {
-            cleaned = '254' + cleaned.slice(3);
+            cleaned = cleaned.slice(1); // Remove + to get 254...
         } else if (cleaned.startsWith('254')) {
             // Already in correct format
         } else if (cleaned.length === 9) {
             cleaned = '254' + cleaned;
         }
-        
+
         return cleaned;
     }
 
     public async initiateSTKPush(phone: string, amount: number, accountReference: string): Promise<{ success: boolean; checkoutRequestId?: string; error?: string }> {
         try {
+            // Check if M-Pesa is configured
+            if (!this.isConfigured) {
+                logger.error('M-Pesa STK Push attempted but M-Pesa is not configured');
+                return {
+                    success: false,
+                    error: 'Payment service is not configured. Please contact support.'
+                };
+            }
+
             // Validate phone number
             if (!this.validatePhoneNumber(phone)) {
+                logger.warn(`Invalid phone number attempted: ${phone}`);
                 return {
                     success: false,
                     error: 'Invalid phone number. Please use a valid Safaricom number.'
@@ -128,9 +192,13 @@ class MpesaService {
                 };
             }
 
+            logger.info(`Initiating STK Push - Phone: ${phone}, Amount: ${amount}, Ref: ${accountReference}`);
+
             const accessToken = await this.getAccessToken();
             const { password, timestamp } = this.generatePassword();
             const formattedPhone = this.formatPhoneNumber(phone);
+
+            logger.info(`Formatted phone for STK Push: ${formattedPhone}`);
 
             const stkPushData: STKPushRequest = {
                 BusinessShortCode: this.shortcode,
@@ -146,6 +214,8 @@ class MpesaService {
                 TransactionDesc: `WiFi Access`
             };
 
+            logger.info(`Sending STK Push request to ${this.baseUrl}/mpesa/stkpush/v1/processrequest`);
+
             const response = await axios.post(
                 `${this.baseUrl}/mpesa/stkpush/v1/processrequest`,
                 stkPushData,
@@ -153,11 +223,19 @@ class MpesaService {
                     headers: {
                         'Authorization': `Bearer ${accessToken}`,
                         'Content-Type': 'application/json'
-                    }
+                    },
+                    timeout: 30000 // 30 second timeout
                 }
             );
 
             const result: STKPushResponse = response.data;
+
+            logger.info(`STK Push API Response:`, {
+                ResponseCode: result.ResponseCode,
+                ResponseDescription: result.ResponseDescription,
+                CheckoutRequestID: result.CheckoutRequestID,
+                MerchantRequestID: result.MerchantRequestID
+            });
 
             if (result.ResponseCode === '0') {
                 try {
@@ -171,7 +249,7 @@ class MpesaService {
                 } catch (dbError) {
                     logger.warn('Failed to store payment record in database (will continue without storing):', dbError);
                 }
-                
+
                 return {
                     success: true,
                     checkoutRequestId: result.CheckoutRequestID
@@ -185,7 +263,7 @@ class MpesaService {
             }
         } catch (error) {
             logger.error('STK Push initiation failed:', error);
-            
+
             // Check if error is related to database connection
             if (error instanceof Error && (error.message.includes('ECONNREFUSED') || error.message.includes('connect'))) {
                 return {
@@ -193,7 +271,7 @@ class MpesaService {
                     error: 'Unable to connect to database. Please try again later.'
                 };
             }
-            
+
             return {
                 success: false,
                 error: 'Failed to initiate payment. Please try again.'
@@ -205,7 +283,7 @@ class MpesaService {
         try {
             const callback = payload.Body.stkCallback;
             const checkoutRequestId = callback.CheckoutRequestID;
-            
+
             logger.info(`Processing M-Pesa callback for CheckoutRequestID: ${checkoutRequestId}`);
 
             // Check if callback already processed (idempotency)
@@ -220,7 +298,7 @@ class MpesaService {
             }
 
             const payment = existingPayment.rows[0];
-            
+
             // If already processed, return success
             if (payment.status !== 'pending') {
                 logger.info(`Payment ${payment.id} already processed with status: ${payment.status}`);
@@ -232,7 +310,7 @@ class MpesaService {
 
             if (callback.ResultCode === 0) {
                 status = 'success';
-                
+
                 // Extract M-Pesa receipt from callback metadata
                 if (callback.CallbackMetadata?.Item) {
                     const receiptItem = callback.CallbackMetadata.Item.find(
@@ -250,7 +328,7 @@ class MpesaService {
             // Update payment record
             await this.db.query(
                 `UPDATE payments 
-                 SET status = $1, mpesa_receipt = $2, raw_callback = $3, updated_at = NOW()
+                 SET status = $1, mpesa_receipt_number = $2, raw_callback = $3, updated_at = NOW()
                  WHERE mpesa_checkout_request_id = $4`,
                 [status, mpesaReceipt, JSON.stringify(payload), checkoutRequestId]
             );
@@ -288,7 +366,7 @@ class MpesaService {
     public async verifyPayment(paymentId: string): Promise<boolean> {
         try {
             const result = await this.db.query(
-                'SELECT status, mpesa_receipt FROM payments WHERE id = $1',
+                'SELECT status, mpesa_receipt_number FROM payments WHERE id = $1',
                 [paymentId]
             );
 
@@ -297,7 +375,7 @@ class MpesaService {
             }
 
             const payment = result.rows[0];
-            return payment.status === 'success' && payment.mpesa_receipt !== null;
+            return payment.status === 'success' && payment.mpesa_receipt_number !== null;
         } catch (error) {
             logger.error('Failed to verify payment:', error);
             return false;

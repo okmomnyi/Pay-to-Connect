@@ -29,7 +29,7 @@ class Server {
         this.app = express();
         this.db = DatabaseConnection.getInstance();
         this.radiusService = new RadiusService();
-        
+
         this.validateEnvironment();
         this.setupMiddleware();
         this.setupRoutes();
@@ -115,7 +115,7 @@ class Server {
             try {
                 // Check database connection
                 await this.db.query('SELECT 1');
-                
+
                 // Check Redis connection (optional)
                 let redisStatus = 'disabled';
                 if (this.db.isRedisEnabled()) {
@@ -227,8 +227,8 @@ class Server {
 
             res.status(500).json({
                 success: false,
-                error: process.env.NODE_ENV === 'production' 
-                    ? 'Internal server error' 
+                error: process.env.NODE_ENV === 'production'
+                    ? 'Internal server error'
                     : error.message
             });
         });
@@ -242,7 +242,8 @@ class Server {
             'DB_PORT',
             'DB_NAME',
             'DB_USER',
-            'DB_PASSWORD'
+            'DB_PASSWORD',
+            'ENCRYPTION_KEY'
         ];
 
         const missing = requiredEnvVars.filter(varName => !process.env[varName]);
@@ -260,7 +261,7 @@ class Server {
             }
             logger.warn('WARNING: Using default JWT_SECRET. Please change this in production!');
         }
-        
+
         if (process.env.JWT_SECRET && process.env.JWT_SECRET.length < 32) {
             logger.warn('WARNING: JWT_SECRET is too short. Use at least 32 characters.');
         }
