@@ -1,9 +1,13 @@
+import dotenv from 'dotenv';
+
+// Load environment variables - MUST BE FIRST
+dotenv.config();
+
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { join } from 'path';
-import dotenv from 'dotenv';
 
 import DatabaseConnection from './database/connection';
 import RadiusService from './services/radius';
@@ -16,9 +20,6 @@ import userRoutes from './routes/userRoutes';
 import profileRoutes from './routes/profileRoutes';
 import adminProfileRoutes from './routes/adminProfileRoutes';
 import publicRoutes from './routes/publicRoutes';
-
-// Load environment variables
-dotenv.config();
 
 class Server {
     private app: express.Application;
@@ -182,7 +183,7 @@ class Server {
 
         // Profile page route
         this.app.get('/profile', (req, res) => {
-            res.sendFile(join(__dirname, '../public/profile-enhanced.html'));
+            res.sendFile(join(__dirname, '../public/profile.html'));
         });
 
         // Portal page route
