@@ -6,7 +6,7 @@ class WiFiPortal {
         this.macAddress = this.getMacAddress();
         this.userToken = localStorage.getItem('userToken');
         this.userData = JSON.parse(localStorage.getItem('userData') || '{}');
-        
+
         this.initializeElements();
         this.bindEvents();
         this.checkAuthentication(); // This will call loadPackages if authenticated
@@ -58,7 +58,7 @@ class WiFiPortal {
         this.checkStatusButton.addEventListener('click', () => this.checkPaymentStatus());
         this.retryPaymentButton.addEventListener('click', () => this.showPackages());
         this.newSessionButton.addEventListener('click', () => this.showPackages());
-        
+
         // Terms modal
         this.termsButton.addEventListener('click', () => this.showTerms());
         this.closeTermsButton.addEventListener('click', () => this.hideTerms());
@@ -83,7 +83,7 @@ class WiFiPortal {
         if (logoutBtn) {
             logoutBtn.addEventListener('click', () => this.logout());
         }
-        
+
         // Profile link
         const profileLink = document.querySelector('#userInfo a[href="/profile"]');
         if (profileLink) {
@@ -128,14 +128,14 @@ class WiFiPortal {
 
     generateFakeMac() {
         // Generate a fake MAC address for testing
-        return Array.from({length: 6}, () => 
+        return Array.from({ length: 6 }, () =>
             Math.floor(Math.random() * 256).toString(16).padStart(2, '0')
         ).join(':');
     }
 
     formatPhoneNumber(input) {
         let value = input.value.replace(/\D/g, '');
-        
+
         if (value.startsWith('254')) {
             value = '+' + value;
         } else if (value.startsWith('0') && value.length > 1) {
@@ -143,7 +143,7 @@ class WiFiPortal {
         } else if (value.length > 0 && !value.startsWith('254') && !value.startsWith('0')) {
             value = '+254' + value;
         }
-        
+
         input.value = value;
     }
 
@@ -188,7 +188,7 @@ class WiFiPortal {
     showPaymentStatus(status) {
         this.hideAllSections();
         this.paymentStatus.classList.remove('hidden');
-        
+
         if (status === 'pending') {
             this.paymentPending.classList.remove('hidden');
         } else if (status === 'success') {
@@ -209,7 +209,7 @@ class WiFiPortal {
     async loadPackages() {
         try {
             this.showLoading();
-            
+
             const response = await fetch('/api/portal/packages');
             const data = await response.json();
 
@@ -231,7 +231,7 @@ class WiFiPortal {
         packages.forEach(pkg => {
             const packageCard = document.createElement('div');
             packageCard.className = 'bg-white bg-opacity-10 rounded-lg p-4 cursor-pointer hover:bg-opacity-20 transition duration-200 border border-white border-opacity-20';
-            
+
             packageCard.innerHTML = `
                 <div class="flex justify-between items-center">
                     <div>
@@ -254,11 +254,11 @@ class WiFiPortal {
 
     selectPackage(pkg) {
         this.currentPackage = pkg;
-        
+
         this.selectedPackageName.textContent = pkg.name;
         this.selectedPackageDuration.textContent = pkg.duration_display;
         this.selectedPackagePrice.textContent = `KES ${pkg.price_kes}`;
-        
+
         this.showPaymentForm();
     }
 
@@ -287,7 +287,7 @@ class WiFiPortal {
             const headers = {
                 'Content-Type': 'application/json'
             };
-            
+
             // Add authentication token if available
             if (this.userToken) {
                 headers['Authorization'] = `Bearer ${this.userToken}`;
@@ -310,7 +310,7 @@ class WiFiPortal {
             }
 
             this.checkoutRequestId = data.checkoutRequestId;
-            
+
             // Persist payment state to localStorage for recovery on refresh
             localStorage.setItem('pendingPayment', JSON.stringify({
                 checkoutRequestId: data.checkoutRequestId,
@@ -318,12 +318,14 @@ class WiFiPortal {
                 packageName: data.packageName,
                 timestamp: Date.now()
             }));
-            
+
             // Update pending payment display
             document.getElementById('pendingAmount').textContent = `KES ${data.amount}`;
             document.getElementById('pendingPackage').textContent = data.packageName;
-            
+
             this.showPaymentStatus('pending');
+            // Check status immediately once, then start interval polling
+            await this.checkPaymentStatus();
             this.startStatusCheck();
 
         } catch (error) {
@@ -337,7 +339,7 @@ class WiFiPortal {
     validatePhoneNumber(phone) {
         // Remove all non-digits
         const digits = phone.replace(/\D/g, '');
-        
+
         // Check various formats
         if (digits.length === 12 && digits.startsWith('254')) {
             return true; // +254XXXXXXXXX
@@ -348,7 +350,7 @@ class WiFiPortal {
         if (digits.length === 9 && digits.startsWith('7')) {
             return true; // 7XXXXXXXX
         }
-        
+
         return false;
     }
 
@@ -389,9 +391,9 @@ class WiFiPortal {
     displaySuccessSession(session) {
         const expiryDate = new Date(session.expiresAt);
         document.getElementById('sessionExpiry').textContent = expiryDate.toLocaleString();
-        
+
         this.updateTimeRemaining(session.remainingSeconds);
-        
+
         // Start countdown timer
         this.startCountdown(session.remainingSeconds);
     }
@@ -400,36 +402,36 @@ class WiFiPortal {
         const hours = Math.floor(seconds / 3600);
         const minutes = Math.floor((seconds % 3600) / 60);
         const secs = seconds % 60;
-        
+
         let timeString = '';
         if (hours > 0) timeString += `${hours}h `;
         if (minutes > 0) timeString += `${minutes}m `;
         timeString += `${secs}s`;
-        
+
         document.getElementById('timeRemaining').textContent = timeString;
     }
 
     startCountdown(initialSeconds) {
         let remainingSeconds = initialSeconds;
         let warningShown = false;
-        
+
         const countdown = setInterval(() => {
             remainingSeconds--;
-            
+
             // Show warning when 5 minutes remaining
             if (remainingSeconds === 300 && !warningShown) {
                 this.showError('Your session will expire in 5 minutes');
                 warningShown = true;
             }
-            
+
             if (remainingSeconds <= 0) {
                 clearInterval(countdown);
                 this.updateTimeRemaining(0);
                 this.showError('Your session has expired. Redirecting to purchase page...');
-                
+
                 // Clear any stored session data
                 localStorage.removeItem('pendingPayment');
-                
+
                 // Redirect to portal after 3 seconds
                 setTimeout(() => {
                     this.showPackages();
@@ -487,13 +489,13 @@ class WiFiPortal {
                 // Check if payment is less than 10 minutes old
                 if (Date.now() - payment.timestamp < 600000) {
                     this.checkoutRequestId = payment.checkoutRequestId;
-                    
+
                     // Update pending payment display
                     const pendingAmount = document.getElementById('pendingAmount');
                     const pendingPackage = document.getElementById('pendingPackage');
                     if (pendingAmount) pendingAmount.textContent = `KES ${payment.amount}`;
                     if (pendingPackage) pendingPackage.textContent = payment.packageName;
-                    
+
                     this.showPaymentStatus('pending');
                     this.startStatusCheck();
                 } else {

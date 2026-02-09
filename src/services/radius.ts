@@ -247,29 +247,37 @@ class RadiusService {
         }
     }
 
-    public async createSession(deviceMacAddress: string, packageId: string, paymentId: string, routerIp: string): Promise<{ success: boolean; sessionId?: string; error?: string }> {
+    public async createSession(deviceMacAddress: string, packageId: string, paymentId: string, routerIp: string, userId?: string): Promise<{ success: boolean; sessionId?: string; error?: string }> {
         try {
             return await this.db.transaction(async (client) => {
                 // Get or create device
                 let deviceResult = await client.query(
-                    'SELECT id FROM devices WHERE mac_address = $1',
+                    'SELECT id, user_id FROM devices WHERE mac_address = $1',
                     [deviceMacAddress]
                 );
 
                 let deviceId: string;
                 if (deviceResult.rows.length === 0) {
+                    // Create new device, link to user if userId provided
                     const newDevice = await client.query(
-                        'INSERT INTO devices (mac_address) VALUES ($1) RETURNING id',
-                        [deviceMacAddress]
+                        'INSERT INTO devices (mac_address, user_id) VALUES ($1, $2) RETURNING id',
+                        [deviceMacAddress, userId || null]
                     );
                     deviceId = newDevice.rows[0].id;
                 } else {
                     deviceId = deviceResult.rows[0].id;
-                    // Update last seen
-                    await client.query(
-                        'UPDATE devices SET last_seen = NOW() WHERE id = $1',
-                        [deviceId]
-                    );
+                    // Update last seen and link to user if not already linked
+                    if (userId && !deviceResult.rows[0].user_id) {
+                        await client.query(
+                            'UPDATE devices SET last_seen = NOW(), user_id = $1 WHERE id = $2',
+                            [userId, deviceId]
+                        );
+                    } else {
+                        await client.query(
+                            'UPDATE devices SET last_seen = NOW() WHERE id = $1',
+                            [deviceId]
+                        );
+                    }
                 }
 
                 // Get package details
@@ -290,17 +298,17 @@ class RadiusService {
                     [deviceId]
                 );
 
-                // Create new session with router IP
+                // Create new session with router IP and user_id
                 const endTime = new Date(Date.now() + durationMinutes * 60 * 1000);
                 const sessionResult = await client.query(`
-                    INSERT INTO sessions (device_id, package_id, payment_id, router_ip, end_time)
-                    VALUES ($1, $2, $3, $4::inet, $5)
+                    INSERT INTO sessions (device_id, package_id, payment_id, router_ip, end_time, user_id, active)
+                    VALUES ($1, $2, $3, $4::inet, $5, $6, true)
                     RETURNING id
-                `, [deviceId, packageId, paymentId, routerIp, endTime]);
+                `, [deviceId, packageId, paymentId, routerIp, endTime, userId || null]);
 
                 const sessionId = sessionResult.rows[0].id;
 
-                logger.info(`Created session ${sessionId} for device ${deviceMacAddress}, expires at ${endTime.toISOString()}`);
+                logger.info(`Created session ${sessionId} for device ${deviceMacAddress}, user ${userId || 'anonymous'}, expires at ${endTime.toISOString()}`);
 
                 return { success: true, sessionId };
             });

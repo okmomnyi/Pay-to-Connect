@@ -73,7 +73,7 @@ class PortalController {
             });
         } catch (error) {
             logger.error('Failed to get packages from database, using test data:', error);
-            
+
             // Return test packages if database is not available
             const testPackages: PackageResponse[] = [
                 {
@@ -197,7 +197,7 @@ class PortalController {
             } catch (dbError) {
                 // Database not available, use test packages
                 logger.warn('Database not available, using test packages:', dbError);
-                
+
                 const testPackages = [
                     { id: '550e8400-e29b-41d4-a716-446655440001', name: '1 Hour Basic', price_kes: 10 },
                     { id: '550e8400-e29b-41d4-a716-446655440002', name: '3 Hours Standard', price_kes: 25 },
@@ -239,14 +239,15 @@ class PortalController {
                                 macAddress,
                                 phone,
                                 amount,
-                                accountReference
+                                accountReference,
+                                userId
                             })
                         );
                     } else {
                         // Store in database as fallback
                         await this.db.query(
                             `UPDATE payments SET raw_callback = $1 WHERE mpesa_checkout_request_id = $2`,
-                            [JSON.stringify({ packageId, macAddress, phone, amount, accountReference }), paymentResult.checkoutRequestId]
+                            [JSON.stringify({ packageId, macAddress, phone, amount, accountReference, userId }), paymentResult.checkoutRequestId]
                         );
                     }
                 } catch (storageError) {
@@ -394,14 +395,14 @@ class PortalController {
                     LIMIT 1
                 `, [macAddress, userId]);
 
-            if (sessionResult.rows.length === 0) {
-                res.json({
-                    success: true,
-                    hasActiveSession: false,
-                    message: 'No active session found'
-                });
-                return;
-            }
+                if (sessionResult.rows.length === 0) {
+                    res.json({
+                        success: true,
+                        hasActiveSession: false,
+                        message: 'No active session found'
+                    });
+                    return;
+                }
 
                 const session = sessionResult.rows[0];
                 res.json({
@@ -464,21 +465,22 @@ class PortalController {
                 }
 
                 if (sessionData && callback.ResultCode === 0) {
-                    
+
                     // Get router IP from request or use default
                     const routerIp = req.ip || '127.0.0.1';
 
-                    // Create session
+                    // Create session with user ID
                     const sessionResult = await this.radiusService.createSession(
                         sessionData.macAddress,
                         sessionData.packageId,
                         result.paymentId,
-                        routerIp
+                        routerIp,
+                        sessionData.userId
                     );
 
                     if (sessionResult.success) {
                         logger.info(`Session created successfully: ${sessionResult.sessionId}`);
-                        
+
                         // Store session ID in Redis for quick access (if available)
                         if (this.db.isRedisEnabled()) {
                             const redisClient = this.db.getRedisClient();
@@ -507,7 +509,7 @@ class PortalController {
             });
         } catch (error) {
             logger.error('Failed to process M-Pesa callback:', error);
-            
+
             // Still respond with success to avoid retries
             res.json({
                 ResultCode: 0,
