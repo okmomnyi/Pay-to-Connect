@@ -119,12 +119,15 @@ class PortalController {
 
     public initiatePayment = async (req: any, res: Response): Promise<void> => {
         try {
-            // For testing purposes, skip authentication if not provided
-            // This should be removed in production
-            let userId = 'test-user-id';
-            if (req.user && req.user.userId) {
-                userId = req.user.userId;
+            // Require authentication - get userId from authenticated user
+            if (!req.user || !req.user.userId) {
+                res.status(401).json({
+                    success: false,
+                    error: 'Authentication required'
+                });
+                return;
             }
+            const userId = req.user.userId;
 
             // Validate request
             const schema = Joi.object({
