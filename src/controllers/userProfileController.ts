@@ -21,11 +21,11 @@ class UserProfileController {
     // Get user profile
     public getProfile = async (req: any, res: Response): Promise<void> => {
         try {
-            const userId = req.user.userId;
+            const userId = req.user.id;
 
             const result = await this.db.query(
-                `SELECT id, username, email, full_name, phone, profile_picture_url, 
-                        created_at, last_password_change, email_verified, phone_verified
+                `SELECT id, username, email, first_name, last_name, phone, 
+                        created_at, email_verified, phone_verified, last_login
                  FROM users 
                  WHERE id = $1`,
                 [userId]
@@ -55,10 +55,11 @@ class UserProfileController {
     // Update user profile
     public updateProfile = async (req: any, res: Response): Promise<void> => {
         try {
-            const userId = req.user.userId;
-            
+            const userId = req.user.id;
+
             const schema = Joi.object({
-                full_name: Joi.string().max(255),
+                first_name: Joi.string().max(100),
+                last_name: Joi.string().max(100),
                 phone: Joi.string().max(20),
                 email: Joi.string().email()
             });
@@ -94,10 +95,10 @@ class UserProfileController {
 
             values.push(userId);
             const query = `
-                UPDATE users 
+                UPDATE users
                 SET ${updates.join(', ')}, updated_at = NOW()
                 WHERE id = $${paramCount}
-                RETURNING id, username, email, full_name, phone
+                RETURNING id, username, email, first_name, last_name, phone
             `;
 
             const result = await this.db.query(query, values);
@@ -125,8 +126,8 @@ class UserProfileController {
     // Change password
     public changePassword = async (req: any, res: Response): Promise<void> => {
         try {
-            const userId = req.user.userId;
-            
+            const userId = req.user.id;
+
             const schema = Joi.object({
                 currentPassword: Joi.string().required(),
                 newPassword: Joi.string().min(8).required(),
@@ -219,7 +220,7 @@ class UserProfileController {
     // Get user's security questions
     public getUserSecurityQuestions = async (req: any, res: Response): Promise<void> => {
         try {
-            const userId = req.user.userId;
+            const userId = req.user.id;
 
             const result = await this.db.query(
                 `SELECT sq.id, sq.question, usa.created_at
@@ -246,8 +247,8 @@ class UserProfileController {
     // Set security question answers
     public setSecurityAnswers = async (req: any, res: Response): Promise<void> => {
         try {
-            const userId = req.user.userId;
-            
+            const userId = req.user.id;
+
             const schema = Joi.object({
                 answers: Joi.array().items(
                     Joi.object({
@@ -275,7 +276,7 @@ class UserProfileController {
             // Insert new answers
             for (const answer of value.answers) {
                 const answerHash = await bcrypt.hash(answer.answer.toLowerCase().trim(), 10);
-                
+
                 await this.db.query(
                     `INSERT INTO user_security_answers (user_id, question_id, answer_hash)
                      VALUES ($1, $2, $3)`,

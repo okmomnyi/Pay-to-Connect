@@ -22,7 +22,7 @@ import adminProfileRoutes from './routes/adminProfileRoutes';
 import publicRoutes from './routes/publicRoutes';
 
 class Server {
-    private app: express.Application;
+    public app: express.Application;
     private db: DatabaseConnection;
     private radiusService: RadiusService;
 
@@ -320,7 +320,7 @@ class Server {
 }
 
 // Handle graceful shutdown
-const server = new Server();
+export const server = new Server();
 
 process.on('SIGTERM', async () => {
     logger.info('SIGTERM received, shutting down gracefully');
