@@ -1,8 +1,9 @@
 # Multi-stage build for production-ready Node.js application
-FROM node:22-alpine AS builder
+FROM node:22-slim AS builder
 
-# Patch all Alpine packages to eliminate known CVEs
-RUN apk upgrade --no-cache
+# Patch base OS packages
+RUN apt-get update && apt-get upgrade -y --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
 WORKDIR /app
@@ -21,17 +22,16 @@ COPY src/ ./src/
 RUN npm run build
 
 # Production stage
-FROM node:22-alpine AS production
+FROM node:22-slim AS production
 
-# Patch all Alpine packages to eliminate known CVEs
-RUN apk upgrade --no-cache
-
-# Install dumb-init for proper signal handling
-RUN apk add --no-cache dumb-init
+# Patch base OS packages and install dumb-init
+RUN apt-get update && apt-get upgrade -y --no-install-recommends \
+    && apt-get install -y --no-install-recommends dumb-init \
+    && rm -rf /var/lib/apt/lists/*
 
 # Create app user
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nodejs -u 1001
+RUN groupadd -g 1001 nodejs && \
+    useradd -u 1001 -g nodejs -s /bin/sh -m nodejs
 
 # Set working directory
 WORKDIR /app
