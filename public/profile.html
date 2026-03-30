@@ -1,211 +1,156 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Profile - SmartWiFi</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-        .gradient-bg {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        }
-
-        .glass-effect {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-        }
-
-        .accordion-content {
-            transition: max-height 0.3s ease-out;
-            max-height: 0;
-            overflow: hidden;
-        }
-
-        .accordion-content.active {
-            max-height: 1000px;
-        }
-
-        .rotate-icon {
-            transition: transform 0.3s ease;
-        }
-
-        .rotate-icon.active {
-            transform: rotate(180deg);
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SmartWiFi — My Profile</title>
+  <link rel="stylesheet" href="portal.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Tailwind needed for profile.js dynamic classes -->
+  <script src="https://cdn.tailwindcss.com"></script>
 </head>
+<body>
+<div class="page-wrapper" style="justify-content:flex-start; padding-top:32px; padding-bottom:40px;">
+  <div class="page-container page-container--wide">
 
-<body class="gradient-bg min-h-screen py-8 px-4 font-sans text-gray-800">
-    <div class="max-w-2xl mx-auto space-y-6">
-
-        <!-- Header / Back Link -->
-        <div class="flex justify-between items-center text-white mb-2">
-            <a href="/portal" class="flex items-center hover:text-blue-200 transition">
-                <i class="fas fa-arrow-left mr-2"></i> Back to Portal
-            </a>
-            <button onclick="logout()" class="flex items-center hover:text-red-200 transition">
-                <i class="fas fa-sign-out-alt mr-2"></i> Logout
-            </button>
-        </div>
-
-        <!-- Main Profile Card -->
-        <div class="glass-effect rounded-2xl shadow-2xl overflow-hidden">
-            <!-- Profile Header -->
-            <div class="bg-indigo-600 bg-opacity-10 p-6 text-center border-b border-gray-100">
-                <div id="avatar"
-                    class="w-24 h-24 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl text-white font-bold shadow-lg">
-                    👤
-                </div>
-                <h2 id="profile-name" class="text-2xl font-bold text-gray-800">Loading...</h2>
-                <p id="profile-email" class="text-gray-500">...</p>
-                <div class="flex justify-center gap-2 mt-3">
-                    <span id="profile-status"
-                        class="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-semibold">Loading...</span>
-                    <span id="security-status"
-                        class="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-semibold">Loading...</span>
-                </div>
-            </div>
-
-            <!-- Account Information -->
-            <div class="p-6">
-                <h3 class="text-lg font-bold text-gray-700 mb-4 flex items-center">
-                    <i class="fas fa-user-circle mr-2 text-indigo-600"></i> Account Information
-                </h3>
-
-                <div class="space-y-4">
-                    <div class="flex justify-between border-b border-gray-100 pb-2">
-                        <span class="text-gray-500">Username</span>
-                        <span id="username" class="font-medium">-</span>
-                    </div>
-                    <div class="flex justify-between border-b border-gray-100 pb-2">
-                        <span class="text-gray-500">Phone</span>
-                        <span id="phone" class="font-medium">-</span>
-                    </div>
-                    <div class="flex justify-between border-b border-gray-100 pb-2">
-                        <span class="text-gray-500">Member Since</span>
-                        <span id="member-since" class="font-medium">-</span>
-                    </div>
-                    <div class="flex justify-between pb-2">
-                        <span class="text-gray-500">Last Login</span>
-                        <span id="last-login" class="font-medium">-</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Security Questions Accordion -->
-        <div class="glass-effect rounded-2xl shadow-xl overflow-hidden">
-            <button onclick="toggleAccordion('security-section')"
-                class="w-full flex justify-between items-center p-6 bg-white hover:bg-gray-50 transition">
-                <div class="flex items-center font-bold text-gray-700">
-                    <i class="fas fa-shield-alt mr-3 text-indigo-600"></i> Security Questions
-                    <span id="security-badge-header"
-                        class="ml-3 px-2 py-0.5 bg-yellow-100 text-yellow-700 text-xs rounded-full">Not Set</span>
-                </div>
-                <i id="security-icon" class="fas fa-chevron-down rotate-icon text-gray-400"></i>
-            </button>
-            <div id="security-section" class="accordion-content bg-white">
-                <div class="p-6 border-t border-gray-100">
-                    <p class="text-sm text-gray-500 mb-4">Set 3 security questions to help recover your account.</p>
-                    <form id="security-form" class="space-y-4">
-                        <div id="security-questions-container" class="space-y-4">
-                            <!-- Questions injected by JS -->
-                        </div>
-                        <button type="submit"
-                            class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition duration-200">
-                            Save Security Questions
-                        </button>
-                    </form>
-                </div>
-            </div>
-        </div>
-
-        <!-- Change Password Accordion -->
-        <div class="glass-effect rounded-2xl shadow-xl overflow-hidden">
-            <button onclick="toggleAccordion('password-section')"
-                class="w-full flex justify-between items-center p-6 bg-white hover:bg-gray-50 transition">
-                <div class="flex items-center font-bold text-gray-700">
-                    <i class="fas fa-key mr-3 text-indigo-600"></i> Change Password
-                </div>
-                <i id="password-icon" class="fas fa-chevron-down rotate-icon text-gray-400"></i>
-            </button>
-            <div id="password-section" class="accordion-content bg-white">
-                <div class="p-6 border-t border-gray-100">
-                    <form id="password-form" class="space-y-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Current Password</label>
-                            <input type="password" id="current-password" required
-                                class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">New Password</label>
-                            <input type="password" id="new-password" required minlength="8"
-                                class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Confirm New Password</label>
-                            <input type="password" id="confirm-password" required minlength="8"
-                                class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none">
-                        </div>
-                        <button type="submit"
-                            class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition duration-200">
-                            Update Password
-                        </button>
-                    </form>
-                </div>
-            </div>
-        </div>
-
-        <!-- Purchase History Accordion -->
-        <div class="glass-effect rounded-2xl shadow-xl overflow-hidden">
-            <button onclick="toggleAccordion('history-section')"
-                class="w-full flex justify-between items-center p-6 bg-white hover:bg-gray-50 transition">
-                <div class="flex items-center font-bold text-gray-700">
-                    <i class="fas fa-history mr-3 text-indigo-600"></i> Purchase History
-                </div>
-                <i id="history-icon" class="fas fa-chevron-down rotate-icon text-gray-400"></i>
-            </button>
-            <div id="history-section" class="accordion-content bg-white">
-                <div id="purchase-history" class="p-6 border-t border-gray-100 space-y-3">
-                    <div class="text-center text-gray-500 py-4">Loading history...</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Danger Zone -->
-        <div class="text-center mt-8">
-            <button onclick="logoutAllSessions()" class="text-red-300 hover:text-red-100 text-sm underline transition">
-                Logout from all devices
-            </button>
-        </div>
-
+    <!-- Nav -->
+    <div class="portal-nav">
+      <a href="/portal" class="nav-link">
+        <i class="fas fa-arrow-left"></i> Back to Portal
+      </a>
+      <button onclick="logout()" class="nav-link danger">
+        <i class="fas fa-sign-out-alt"></i> Logout
+      </button>
     </div>
 
-    <!-- Alert Container -->
-    <div id="alert-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
+    <!-- Profile Card -->
+    <div class="card" style="margin-bottom:16px; padding:0; overflow:hidden;">
+      <div class="profile-header">
+        <div id="avatar" class="profile-avatar">👤</div>
+        <div id="profile-name" class="profile-name">Loading...</div>
+        <div id="profile-email" class="profile-email">—</div>
+        <div style="display:flex; justify-content:center; gap:8px; margin-top:12px;">
+          <span id="profile-status" class="badge badge-gray">Loading...</span>
+          <span id="security-status" class="badge badge-amber">Loading...</span>
+        </div>
+      </div>
 
-    <script src="profile.js"></script>
-    <script>
-        function toggleAccordion(id) {
-            const content = document.getElementById(id);
-            const icon = document.getElementById(id.replace('section', 'icon'));
+      <div style="padding:20px 28px;">
+        <div class="data-row">
+          <span class="data-label"><i class="fas fa-user" style="width:18px;color:var(--primary);"></i> Username</span>
+          <span class="data-value" id="username">—</span>
+        </div>
+        <div class="data-row">
+          <span class="data-label"><i class="fas fa-phone" style="width:18px;color:var(--primary);"></i> Phone</span>
+          <span class="data-value" id="phone">—</span>
+        </div>
+        <div class="data-row">
+          <span class="data-label"><i class="fas fa-calendar-alt" style="width:18px;color:var(--primary);"></i> Member Since</span>
+          <span class="data-value" id="member-since">—</span>
+        </div>
+        <div class="data-row">
+          <span class="data-label"><i class="fas fa-clock" style="width:18px;color:var(--primary);"></i> Last Login</span>
+          <span class="data-value" id="last-login">—</span>
+        </div>
+      </div>
+    </div>
 
-            // Close others (optional, but keeps UI clean)
-            // document.querySelectorAll('.accordion-content').forEach(el => {
-            //     if (el.id !== id) {
-            //         el.classList.remove('active');
-            //         const otherIcon = document.getElementById(el.id.replace('section', 'icon'));
-            //         if(otherIcon) otherIcon.classList.remove('active');
-            //     }
-            // });
+    <!-- Security Questions Accordion -->
+    <div class="accordion" style="margin-bottom:12px;">
+      <button class="accordion-header" onclick="toggleAccordion('security-section')">
+        <div class="accordion-title">
+          <i class="fas fa-shield-alt"></i>
+          Security Questions
+          <span id="security-badge-header" class="badge badge-amber" style="font-size:.65rem;">Not Set</span>
+        </div>
+        <i id="security-icon" class="fas fa-chevron-down accordion-chevron"></i>
+      </button>
+      <div id="security-section" class="accordion-body">
+        <div class="accordion-inner">
+          <p style="font-size:.875rem; color:var(--text-2); margin-bottom:16px;">
+            Set 3 security questions to protect and recover your account.
+          </p>
+          <form id="security-form">
+            <div id="security-questions-container" style="display:flex; flex-direction:column; gap:12px;"></div>
+            <button type="submit" class="btn btn-primary mt-md">
+              <i class="fas fa-save"></i> Save Security Questions
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
 
-            content.classList.toggle('active');
-            icon.classList.toggle('active');
-        }
-    </script>
+    <!-- Change Password Accordion -->
+    <div class="accordion" style="margin-bottom:12px;">
+      <button class="accordion-header" onclick="toggleAccordion('password-section')">
+        <div class="accordion-title">
+          <i class="fas fa-key"></i>
+          Change Password
+        </div>
+        <i id="password-icon" class="fas fa-chevron-down accordion-chevron"></i>
+      </button>
+      <div id="password-section" class="accordion-body">
+        <div class="accordion-inner">
+          <form id="password-form" style="display:flex; flex-direction:column; gap:14px;">
+            <div class="form-group" style="margin:0;">
+              <label class="form-label" for="current-password">Current Password</label>
+              <input type="password" id="current-password" class="form-input" required>
+            </div>
+            <div class="form-group" style="margin:0;">
+              <label class="form-label" for="new-password">New Password</label>
+              <input type="password" id="new-password" class="form-input" required minlength="8">
+            </div>
+            <div class="form-group" style="margin:0;">
+              <label class="form-label" for="confirm-password">Confirm New Password</label>
+              <input type="password" id="confirm-password" class="form-input" required minlength="8">
+            </div>
+            <button type="submit" class="btn btn-primary">
+              <i class="fas fa-lock"></i> Update Password
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Purchase History Accordion -->
+    <div class="accordion" style="margin-bottom:24px;">
+      <button class="accordion-header" onclick="toggleAccordion('history-section')">
+        <div class="accordion-title">
+          <i class="fas fa-receipt"></i>
+          Purchase History
+        </div>
+        <i id="history-icon" class="fas fa-chevron-down accordion-chevron"></i>
+      </button>
+      <div id="history-section" class="accordion-body">
+        <div id="purchase-history" class="accordion-inner">
+          <div style="text-align:center; color:var(--text-3); padding:16px 0; font-size:.9rem;">
+            Loading history...
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Danger zone -->
+    <div class="text-center">
+      <button onclick="logoutAllSessions()" class="nav-link danger" style="margin:auto;">
+        <i class="fas fa-power-off"></i> Logout from all devices
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<!-- Alert container (toast) -->
+<div id="alert-container"></div>
+
+<script>
+function toggleAccordion(id) {
+  const content = document.getElementById(id);
+  const icon = document.getElementById(id.replace('section', 'icon'));
+  content.classList.toggle('active');
+  icon.classList.toggle('active');
+}
+</script>
+<script src="profile.js"></script>
 </body>
-
 </html>

@@ -94,11 +94,13 @@ function displayProfile(profile) {
 // Load security questions
 async function loadSecurityQuestions() {
     try {
-        // Try multiple endpoints
-        let response = await fetch(`${API_BASE}/security-questions`);
+        const token = localStorage.getItem('userToken');
+        const authHeaders = token ? { 'Authorization': `Bearer ${token}` } : {};
+
+        let response = await fetch(`${API_BASE}/security-questions`, { headers: authHeaders });
 
         if (!response.ok) {
-            response = await fetch('/api/user/security-questions');
+            response = await fetch('/api/user/security-questions', { headers: authHeaders });
         }
 
         if (!response.ok) throw new Error('Failed to load security questions');
@@ -216,20 +218,16 @@ async function changePassword() {
             return;
         }
 
-        const response = await fetch(`${API_BASE}/change-password`, { // Fixed URL path to match original logic
-            method: 'POST', // Original was POST to /api/user/auth/change-password in HTML logic, but here using API_BASE
-            // NOTE: API_BASE is /api/user/profile. Need to check if route exists there or adjust relative path. 
-            // Previous profile.js used `${API_BASE}/change-password`. 
-            // Previous profile.html used `/api/user/auth/change-password`.
-            // Let's stick to the one that was working in profile.js: `${API_BASE}/change-password` 
-            // WAIT, looking at original profile.js it used `${API_BASE}/change-password`.
+        const response = await fetch(`${API_BASE}/change-password`, {
+            method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${token}`
             },
             body: JSON.stringify({
-                current_password: currentPassword,
-                new_password: newPassword
+                currentPassword: currentPassword,
+                newPassword: newPassword,
+                confirmPassword: confirmPassword
             })
         });
 

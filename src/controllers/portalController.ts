@@ -128,8 +128,8 @@ class PortalController {
             const schema = Joi.object({
                 phone: Joi.string().pattern(/^(\+254|254|0)?[17]\d{8}$/).required(),
                 packageId: Joi.string().uuid().required(),
-                macAddress: Joi.string().pattern(/^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/).required(),
-                routerId: Joi.string().uuid().required()
+                macAddress: Joi.string().required(),
+                routerId: Joi.string().uuid().optional().allow(null, '')
             });
 
             const { error, value } = schema.validate(req.body);
@@ -138,7 +138,8 @@ class PortalController {
                 return;
             }
 
-            const { phone, packageId, macAddress, routerId } = value;
+            const { phone, packageId, macAddress } = value;
+            let routerId: string | null = value.routerId || null;
 
             // Verify package exists
             const packageResult = await this.db.query(
@@ -152,14 +153,21 @@ class PortalController {
             const packageData = packageResult.rows[0];
             const amount = parseFloat(packageData.price_kes);
 
-            // Verify router exists
-            const routerResult = await this.db.query(
-                'SELECT id, ip_address FROM routers WHERE id = $1 AND active = true',
-                [routerId]
-            );
-            if (routerResult.rows.length === 0) {
-                res.status(404).json({ success: false, error: 'Router not found or inactive' });
-                return;
+            // Resolve router — use provided routerId or fall back to first active router
+            if (routerId) {
+                const routerResult = await this.db.query(
+                    'SELECT id FROM routers WHERE id = $1 AND active = true',
+                    [routerId]
+                );
+                if (routerResult.rows.length === 0) {
+                    res.status(404).json({ success: false, error: 'Router not found or inactive' });
+                    return;
+                }
+            } else {
+                const defaultRouter = await this.db.query(
+                    'SELECT id FROM routers WHERE active = true LIMIT 1'
+                );
+                routerId = defaultRouter.rows.length > 0 ? defaultRouter.rows[0].id : null;
             }
 
             // Block duplicate pending payments for this device (within 10 minutes)

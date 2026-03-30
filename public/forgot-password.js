@@ -6,32 +6,9 @@ let securityQuestions = [];
 let resetToken = null;
 
 // Initialize forgot password page
-document.addEventListener('DOMContentLoaded', async () => {
-    try {
-        await loadSecurityQuestions();
-        setupEventListeners();
-    } catch (error) {
-        console.error('Error initializing forgot password:', error);
-        showAlert('Error initializing password recovery', 'error');
-    }
+document.addEventListener('DOMContentLoaded', () => {
+    setupEventListeners();
 });
-
-// Load security questions
-async function loadSecurityQuestions() {
-    try {
-        const response = await fetch(`${API_BASE}/security-questions`);
-        
-        if (!response.ok) {
-            throw new Error('Failed to load security questions');
-        }
-
-        const data = await response.json();
-        securityQuestions = data.questions;
-    } catch (error) {
-        console.error('Error loading security questions:', error);
-        showAlert('Error loading security questions', 'error');
-    }
-}
 
 // Setup event listeners
 function setupEventListeners() {
@@ -71,7 +48,7 @@ async function verifyIdentity() {
         submitBtn.disabled = true;
 
         // Get user's security questions
-        const response = await fetch(`${API_BASE}/security-answers`, {
+        const response = await fetch(`${API_BASE}/security-answers/forgot`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -110,10 +87,10 @@ function showSecurityQuestions(questions) {
 
     questions.forEach((question, index) => {
         const questionDiv = document.createElement('div');
-        questionDiv.className = 'security-question';
+        questionDiv.className = 'sq-block form-group';
         questionDiv.innerHTML = `
-            <label>${question.question}</label>
-            <input type="text" id="answer-${index}" required placeholder="Enter your answer">
+            <label class="form-label">${question.question}</label>
+            <input type="text" id="answer-${index}" class="form-input" required placeholder="Your answer">
             <input type="hidden" id="question-id-${index}" value="${question.question_id}">
         `;
         container.appendChild(questionDiv);
@@ -132,7 +109,7 @@ async function verifySecurityAnswers() {
         // Collect answers
         const questionInputs = document.querySelectorAll('[id^="question-id-"]');
         questionInputs.forEach((input, index) => {
-            const questionId = parseInt(input.value);
+            const questionId = input.value;
             const answer = document.getElementById(`answer-${index}`).value.trim();
             
             if (!answer) {
@@ -246,7 +223,7 @@ function moveToStep(step) {
     for (let i = 1; i <= 3; i++) {
         const stepIndicator = document.getElementById(`step-${i}`);
         stepIndicator.classList.remove('active', 'completed');
-        
+
         if (i < step) {
             stepIndicator.classList.add('completed');
         } else if (i === step) {
@@ -254,22 +231,28 @@ function moveToStep(step) {
         }
     }
 
+    // Update connector lines
+    const line1 = document.getElementById('line-1');
+    const line2 = document.getElementById('line-2');
+    if (line1) line1.classList.toggle('done', step > 1);
+    if (line2) line2.classList.toggle('done', step > 2);
+
     currentStep = step;
 }
 
 // Show alert
 function showAlert(message, type) {
     const container = document.getElementById('alert-container');
-    const alert = document.createElement('div');
-    alert.className = `alert alert-${type}`;
-    alert.textContent = message;
-    
-    container.appendChild(alert);
-    
-    // Auto-remove after 5 seconds
-    setTimeout(() => {
-        alert.remove();
-    }, 5000);
+    const iconMap = { success: 'check-circle', error: 'exclamation-circle', info: 'info-circle', warning: 'exclamation-triangle' };
+    const icon = iconMap[type] || 'info-circle';
+
+    const alertEl = document.createElement('div');
+    alertEl.className = `alert alert-${type}`;
+    alertEl.innerHTML = `<i class="fas fa-${icon}"></i><span>${message}</span>`;
+    container.innerHTML = '';
+    container.appendChild(alertEl);
+
+    setTimeout(() => alertEl.remove(), 6000);
 }
 
 // Clear alerts

@@ -24,9 +24,10 @@ class UserProfileController {
             const userId = req.user.id;
 
             const result = await this.db.query(
-                `SELECT id, username, email, first_name, last_name, phone, 
-                        created_at, email_verified, phone_verified, last_login
-                 FROM users 
+                `SELECT id, username, email, first_name, last_name, phone,
+                        created_at, email_verified, phone_verified, last_login,
+                        security_questions_set
+                 FROM users
                  WHERE id = $1`,
                 [userId]
             );
@@ -176,8 +177,8 @@ class UserProfileController {
 
             // Update password
             await this.db.query(
-                `UPDATE users 
-                 SET password_hash = $1, last_password_change = NOW(), updated_at = NOW()
+                `UPDATE users
+                 SET password_hash = $1, updated_at = NOW()
                  WHERE id = $2`,
                 [newPasswordHash, userId]
             );

@@ -5,7 +5,7 @@ import pool from '../database/db';
 
 export const getProfile = async (req: Request, res: Response): Promise<void> => {
     try {
-        const userId = (req as any).user.id;
+        const userId = (req as any).user.userId ?? (req as any).user.id;
         
         const profile = await profileService.getUserProfile(userId);
         
@@ -32,7 +32,7 @@ export const getProfile = async (req: Request, res: Response): Promise<void> => 
 
 export const updateProfile = async (req: Request, res: Response): Promise<void> => {
     try {
-        const userId = (req as any).user.id;
+        const userId = (req as any).user.userId ?? (req as any).user.id;
         const { first_name, last_name, phone } = req.body;
 
         const updatedProfile = await profileService.updateProfile(userId, {
@@ -74,13 +74,22 @@ export const getSecurityQuestions = async (req: Request, res: Response): Promise
 
 export const setSecurityAnswers = async (req: Request, res: Response): Promise<void> => {
     try {
-        const userId = (req as any).user.id;
+        const userId = (req as any).user.userId ?? (req as any).user.id;
         const { answers } = req.body;
 
         if (!answers || !Array.isArray(answers) || answers.length < 3) {
             res.status(400).json({
                 success: false,
                 error: 'At least 3 security answers are required'
+            });
+            return;
+        }
+
+        const questionIds = answers.map((a: any) => a.question_id);
+        if (new Set(questionIds).size !== questionIds.length) {
+            res.status(400).json({
+                success: false,
+                error: 'Each security question must be unique — you selected the same question more than once'
             });
             return;
         }
@@ -102,7 +111,7 @@ export const setSecurityAnswers = async (req: Request, res: Response): Promise<v
 
 export const getSecurityAnswers = async (req: Request, res: Response): Promise<void> => {
     try {
-        const userId = (req as any).user.id;
+        const userId = (req as any).user.userId ?? (req as any).user.id;
         
         const answers = await profileService.getUserSecurityAnswers(userId);
         
@@ -296,7 +305,7 @@ export const resetPassword = async (req: Request, res: Response): Promise<void> 
 
 export const changePassword = async (req: Request, res: Response): Promise<void> => {
     try {
-        const userId = (req as any).user.id;
+        const userId = (req as any).user.userId ?? (req as any).user.id;
         const { current_password, new_password } = req.body;
 
         if (!current_password || !new_password) {

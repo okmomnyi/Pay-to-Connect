@@ -4,6 +4,7 @@ class WiFiPortal {
         this.checkoutRequestId = null;
         this.statusCheckInterval = null;
         this.macAddress = this.getMacAddress();
+        this.routerId = this.getRouterId();
         this.userToken = localStorage.getItem('userToken');
         this.userData = JSON.parse(localStorage.getItem('userData') || '{}');
 
@@ -124,6 +125,11 @@ class WiFiPortal {
         // or obtained from the router's redirect
         const urlParams = new URLSearchParams(window.location.search);
         return urlParams.get('mac') || this.generateFakeMac();
+    }
+
+    getRouterId() {
+        const urlParams = new URLSearchParams(window.location.search);
+        return urlParams.get('router') || urlParams.get('routerId') || urlParams.get('router_id') || null;
     }
 
     generateFakeMac() {
@@ -299,7 +305,8 @@ class WiFiPortal {
                 body: JSON.stringify({
                     phone: phone,
                     packageId: this.currentPackage.id,
-                    macAddress: this.macAddress
+                    macAddress: this.macAddress,
+                    routerId: this.routerId
                 })
             });
 
@@ -444,10 +451,10 @@ class WiFiPortal {
     }
 
     startStatusCheck() {
-        // Check status every 3 seconds
+        // Check status every 6 seconds
         this.statusCheckInterval = setInterval(() => {
             this.checkPaymentStatus();
-        }, 3000);
+        }, 6000);
 
         // Stop checking after 5 minutes
         setTimeout(() => {
