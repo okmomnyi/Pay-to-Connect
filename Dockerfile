@@ -1,6 +1,9 @@
 # Multi-stage build for production-ready Node.js application
 FROM node:22-alpine AS builder
 
+# Patch all Alpine packages to eliminate known CVEs
+RUN apk upgrade --no-cache
+
 # Set working directory
 WORKDIR /app
 
@@ -19,6 +22,9 @@ RUN npm run build
 
 # Production stage
 FROM node:22-alpine AS production
+
+# Patch all Alpine packages to eliminate known CVEs
+RUN apk upgrade --no-cache
 
 # Install dumb-init for proper signal handling
 RUN apk add --no-cache dumb-init
