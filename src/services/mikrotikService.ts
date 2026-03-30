@@ -13,6 +13,7 @@ interface RouterCredentials {
     api_username: string;
     api_password_encrypted: string;
     encryption_iv: string;
+    encryption_auth_tag: string;
     api_port: number;
     connection_timeout: number;
 }
@@ -78,11 +79,11 @@ class MikroTikService {
 
             const router = routerInfo.rows[0];
 
-            // Decrypt password
+            // Decrypt password using correct IV and authTag
             const password = encryptionService.decrypt(
                 credentials.api_password_encrypted,
                 credentials.encryption_iv,
-                credentials.encryption_iv // Using IV as auth tag for simplicity
+                credentials.encryption_auth_tag
             );
 
             const api = new RouterOSAPI({
@@ -436,7 +437,12 @@ class MikroTikService {
             for (const pkg of packages) {
                 try {
                     const profileName = `pkg_${pkg.id}`;
-                    
+                    // MikroTik rate-limit format: "Xm/Xm" (upload/download in bits per second)
+                    // speed_limit_mbps is stored in Mbps; convert to MikroTik notation.
+                    const rateLimit = pkg.speed_limit_mbps
+                        ? `${pkg.speed_limit_mbps}M/${pkg.speed_limit_mbps}M`
+                        : '';
+
                     // Create or update profile
                     if (existingProfileNames.includes(profileName)) {
                         // Update existing
@@ -446,7 +452,7 @@ class MikroTikService {
                             name: profileName,
                             'session-timeout': pkg.duration_minutes ? `${pkg.duration_minutes * 60}` : 'none',
                             'shared-users': '1',
-                            'rate-limit': pkg.speed_limit || ''
+                            'rate-limit': rateLimit
                         });
                     } else {
                         // Create new
@@ -454,7 +460,7 @@ class MikroTikService {
                             name: profileName,
                             'session-timeout': pkg.duration_minutes ? `${pkg.duration_minutes * 60}` : 'none',
                             'shared-users': '1',
-                            'rate-limit': pkg.speed_limit || ''
+                            'rate-limit': rateLimit
                         });
                     }
                     
@@ -541,7 +547,7 @@ class MikroTikService {
 
         try {
             api = await this.connectToRouter(routerId);
-            
+
             if (!api) {
                 return [];
             }
@@ -553,11 +559,84 @@ class MikroTikService {
             return [];
         } finally {
             if (api) {
-                try {
-                    await api.close();
-                } catch (e) {
-                    // Ignore
+                try { await api.close(); } catch (e) { /* ignore */ }
+            }
+        }
+    }
+
+    async getSystemInfo(routerId: string): Promise<{ success: boolean; info?: any; error?: string }> {
+        let api: any | null = null;
+
+        try {
+            api = await this.connectToRouter(routerId);
+
+            if (!api) {
+                throw new Error('Failed to connect to router');
+            }
+
+            const [identity, resource, version, interfaces] = await Promise.all([
+                api.write('/system/identity/print'),
+                api.write('/system/resource/print'),
+                api.write('/system/package/print', { '?name': 'routeros' }),
+                api.write('/interface/print')
+            ]);
+
+            return {
+                success: true,
+                info: {
+                    identity: identity[0]?.name || 'Unknown',
+                    uptime: resource[0]?.uptime || 'Unknown',
+                    version: resource[0]?.version || (version[0]?.version || 'Unknown'),
+                    cpu_load: resource[0]?.['cpu-load'] || '0',
+                    memory_total: resource[0]?.['total-memory'] || '0',
+                    memory_free: resource[0]?.['free-memory'] || '0',
+                    hdd_total: resource[0]?.['total-hdd-space'] || '0',
+                    hdd_free: resource[0]?.['free-hdd-space'] || '0',
+                    board_name: resource[0]?.['board-name'] || 'Unknown',
+                    architecture: resource[0]?.['architecture-name'] || 'Unknown',
+                    interfaces: (interfaces || []).map((iface: any) => ({
+                        name: iface.name,
+                        type: iface.type,
+                        running: iface.running === 'true',
+                        disabled: iface.disabled === 'true',
+                        mac_address: iface['mac-address'] || ''
+                    }))
                 }
+            };
+        } catch (error: any) {
+            logger.error(`Failed to get system info from router ${routerId}:`, error);
+            return { success: false, error: error.message || 'Failed to get system info' };
+        } finally {
+            if (api) {
+                try { await api.close(); } catch (e) { /* ignore */ }
+            }
+        }
+    }
+
+    async getHotspotUsers(routerId: string): Promise<any[]> {
+        let api: any | null = null;
+
+        try {
+            api = await this.connectToRouter(routerId);
+
+            if (!api) {
+                return [];
+            }
+
+            const users = await api.write('/ip/hotspot/user/print');
+            return (users || []).map((u: any) => ({
+                id: u['.id'],
+                name: u.name,
+                profile: u.profile,
+                disabled: u.disabled === 'true',
+                comment: u.comment || ''
+            }));
+        } catch (error) {
+            logger.error(`Failed to get hotspot users from router ${routerId}:`, error);
+            return [];
+        } finally {
+            if (api) {
+                try { await api.close(); } catch (e) { /* ignore */ }
             }
         }
     }

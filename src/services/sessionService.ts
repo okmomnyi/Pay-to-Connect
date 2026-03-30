@@ -7,14 +7,12 @@ interface Session {
     user_id: string;
     device_id: string;
     package_id: string;
-    router_id: string;
+    router_ip: string;
+    payment_id: string;
     start_time: Date;
     end_time: Date;
     active: boolean;
-    data_used_mb: number;
-    data_limit_mb: number;
-    session_status: string;
-    last_activity: Date;
+    data_used_bytes: number;
 }
 
 interface ActiveSessionInfo {
@@ -24,7 +22,6 @@ interface ActiveSessionInfo {
     data_used_mb: number;
     data_remaining_mb: number;
     time_remaining_minutes: number;
-    session_status: string;
     start_time: Date;
     end_time: Date;
     speed_limit_mbps: number;
@@ -40,7 +37,7 @@ export class SessionService {
         paymentId?: string
     ): Promise<Session> {
         const packageResult = await pool.query(
-            'SELECT duration_minutes, data_limit_mb FROM packages WHERE id = $1',
+            'SELECT duration_minutes FROM packages WHERE id = $1',
             [packageId]
         );
 
@@ -51,28 +48,20 @@ export class SessionService {
         const pkg = packageResult.rows[0];
         const endTime = new Date(Date.now() + pkg.duration_minutes * 60000);
 
+        // Look up router IP — schema stores router_ip INET, not a router FK
+        const routerResult = await pool.query('SELECT ip_address FROM routers WHERE id = $1', [routerId]);
+        const routerIp = routerResult.rows[0]?.ip_address || null;
+
+        // Sessions start inactive — only activated by the M-Pesa callback after confirmed payment
         const result = await pool.query(
-            `INSERT INTO sessions (user_id, device_id, package_id, router_id, payment_id, end_time, data_limit_mb, session_status)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, 'active')
-             RETURNING id, user_id, device_id, package_id, router_id, start_time, end_time, 
-                       active, data_used_mb, data_limit_mb, session_status, last_activity`,
-            [userId, deviceId, packageId, routerId, paymentId, endTime, pkg.data_limit_mb]
+            `INSERT INTO sessions (user_id, device_id, package_id, router_ip, payment_id, end_time, active)
+             VALUES ($1, $2, $3, $4, $5, $6, false)
+             RETURNING id, user_id, device_id, package_id, router_ip, payment_id,
+                       start_time, end_time, active, data_used_bytes`,
+            [userId, deviceId, packageId, routerIp, paymentId, endTime]
         );
 
         const session = result.rows[0];
-
-        const deviceResult = await pool.query('SELECT mac_address FROM devices WHERE id = $1', [deviceId]);
-        const macAddress = deviceResult.rows[0]?.mac_address;
-
-        if (macAddress) {
-            const routerResult = await pool.query('SELECT ip_address FROM routers WHERE id = $1', [routerId]);
-            const routerIp = routerResult.rows[0]?.ip_address;
-            
-            if (routerIp) {
-                const radiusService = new RadiusService();
-                await radiusService.authorizeDevice(macAddress, routerIp);
-            }
-        }
 
         logger.info(`Session created for user ${userId}: ${session.id}`);
 
@@ -81,14 +70,13 @@ export class SessionService {
 
     async getUserActiveSession(userId: string): Promise<ActiveSessionInfo | null> {
         const result = await pool.query(
-            `SELECT 
+            `SELECT
                 s.id as session_id,
                 p.name as package_name,
-                s.data_limit_mb,
-                s.data_used_mb,
-                (s.data_limit_mb - s.data_used_mb) as data_remaining_mb,
+                p.data_limit_mb,
+                ROUND(s.data_used_bytes / 1048576.0, 2) as data_used_mb,
+                ROUND((COALESCE(p.data_limit_mb, 0) * 1048576.0 - s.data_used_bytes) / 1048576.0, 2) as data_remaining_mb,
                 EXTRACT(EPOCH FROM (s.end_time - NOW()))::INTEGER / 60 as time_remaining_minutes,
-                s.session_status,
                 s.start_time,
                 s.end_time,
                 p.speed_limit_mbps,
@@ -97,7 +85,6 @@ export class SessionService {
              JOIN packages p ON s.package_id = p.id
              WHERE s.user_id = $1
              AND s.active = true
-             AND s.session_status = 'active'
              ORDER BY s.created_at DESC
              LIMIT 1`,
             [userId]
@@ -111,20 +98,31 @@ export class SessionService {
     }
 
     async recordDataUsage(sessionId: string, bytesUploaded: number, bytesDownloaded: number): Promise<void> {
+        const totalBytes = bytesUploaded + bytesDownloaded;
+
         await pool.query(
-            'SELECT record_data_usage($1, $2, $3)',
-            [sessionId, bytesUploaded, bytesDownloaded]
+            'UPDATE sessions SET data_used_bytes = data_used_bytes + $1 WHERE id = $2',
+            [totalBytes, sessionId]
         );
 
         const sessionResult = await pool.query(
-            'SELECT active, session_status, device_id FROM sessions WHERE id = $1',
+            `SELECT s.active, s.data_used_bytes, s.device_id, p.data_limit_mb
+             FROM sessions s
+             JOIN packages p ON s.package_id = p.id
+             WHERE s.id = $1`,
             [sessionId]
         );
 
         if (sessionResult.rows.length > 0) {
             const session = sessionResult.rows[0];
-            
-            if (!session.active || session.session_status === 'exhausted') {
+            const dataLimitBytes = session.data_limit_mb ? session.data_limit_mb * 1048576 : null;
+            const dataExhausted = dataLimitBytes !== null && session.data_used_bytes >= dataLimitBytes;
+
+            if (!session.active || dataExhausted) {
+                if (dataExhausted) {
+                    await pool.query('UPDATE sessions SET active = false WHERE id = $1', [sessionId]);
+                }
+
                 const deviceResult = await pool.query('SELECT mac_address FROM devices WHERE id = $1', [session.device_id]);
                 const macAddress = deviceResult.rows[0]?.mac_address;
 
@@ -133,37 +131,41 @@ export class SessionService {
                     await radiusService.disconnectDevice(macAddress);
                 }
 
-                logger.info(`Session ${sessionId} auto-disconnected: ${session.session_status}`);
+                logger.info(`Session ${sessionId} auto-disconnected: data exhausted or inactive`);
             }
         }
     }
 
     async checkAndExpireSessions(): Promise<void> {
-        await pool.query('SELECT check_and_expire_sessions()');
-
+        // Expire sessions that have passed their end_time
         const expiredSessions = await pool.query(
-            `SELECT s.id, d.mac_address 
-             FROM sessions s
-             JOIN devices d ON s.device_id = d.id
-             WHERE s.active = false 
-             AND s.session_status IN ('expired', 'exhausted', 'disconnected')
-             AND s.updated_at > NOW() - INTERVAL '1 minute'`
+            `UPDATE sessions
+             SET active = false
+             WHERE active = true AND end_time < NOW()
+             RETURNING id, device_id`
         );
 
         const radiusService = new RadiusService();
         for (const session of expiredSessions.rows) {
-            await radiusService.disconnectDevice(session.mac_address);
+            const deviceResult = await pool.query(
+                'SELECT mac_address FROM devices WHERE id = $1',
+                [session.device_id]
+            );
+            const macAddress = deviceResult.rows[0]?.mac_address;
+            if (macAddress) {
+                await radiusService.disconnectDevice(macAddress);
+            }
             logger.info(`Session expired and disconnected: ${session.id}`);
         }
     }
 
     async terminateSession(sessionId: string, reason: string = 'manual'): Promise<void> {
         const result = await pool.query(
-            `UPDATE sessions 
-             SET active = false, session_status = 'terminated', disconnect_reason = $2
+            `UPDATE sessions
+             SET active = false
              WHERE id = $1
              RETURNING device_id`,
-            [sessionId, reason]
+            [sessionId]
         );
 
         if (result.rows.length > 0) {
@@ -181,15 +183,14 @@ export class SessionService {
 
     async getUserSessionHistory(userId: string, limit: number = 10): Promise<any[]> {
         const result = await pool.query(
-            `SELECT 
+            `SELECT
                 s.id,
                 p.name as package_name,
                 s.start_time,
                 s.end_time,
-                s.data_used_mb,
-                s.data_limit_mb,
-                s.session_status,
-                s.disconnect_reason,
+                ROUND(s.data_used_bytes / 1048576.0, 2) as data_used_mb,
+                p.data_limit_mb,
+                s.active,
                 py.amount as amount_paid
              FROM sessions s
              JOIN packages p ON s.package_id = p.id
@@ -227,7 +228,7 @@ export class SessionService {
 
     async updateSessionActivity(sessionId: string): Promise<void> {
         await pool.query(
-            'UPDATE sessions SET last_activity = NOW() WHERE id = $1',
+            'UPDATE sessions SET updated_at = NOW() WHERE id = $1',
             [sessionId]
         );
     }

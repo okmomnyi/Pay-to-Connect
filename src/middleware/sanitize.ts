@@ -64,8 +64,7 @@ export const validateNoSQLInjection = (req: Request, res: Response, next: NextFu
                 /(\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|EXEC|EXECUTE)\b)/gi,
                 /(--|\*\/|\/\*)/g,
                 /(\bOR\b.*=.*)/gi,
-                /(\bAND\b.*=.*)/gi,
-                /(;|\||&)/g
+                /(\bAND\b.*=.*)/gi
             ];
             
             return sqlPatterns.some(pattern => pattern.test(obj));

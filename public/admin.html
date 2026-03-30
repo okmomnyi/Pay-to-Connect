@@ -240,13 +240,204 @@
                 <!-- Routers Section -->
                 <div id="routers-section" class="section hidden">
                     <div class="flex justify-between items-center mb-6">
-                        <h2 class="text-2xl font-bold text-gray-800">Routers Management</h2>
+                        <h2 class="text-2xl font-bold text-gray-800">MikroTik Routers</h2>
                         <button onclick="showAddRouterModal()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
                             <i class="fas fa-plus mr-2"></i>Add Router
                         </button>
                     </div>
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="routers-grid">
-                        <p class="text-gray-500">Loading routers...</p>
+
+                    <!-- Router detail view (hidden by default) -->
+                    <div id="router-detail-view" class="hidden mb-6">
+                        <div class="flex items-center mb-4">
+                            <button onclick="closeRouterDetail()" class="mr-3 text-gray-600 hover:text-gray-900">
+                                <i class="fas fa-arrow-left text-xl"></i>
+                            </button>
+                            <h3 class="text-xl font-bold text-gray-800" id="router-detail-name">Router Details</h3>
+                            <span id="router-detail-status-badge" class="ml-3 px-3 py-1 text-sm rounded-full bg-gray-100 text-gray-600">Unknown</span>
+                        </div>
+
+                        <!-- Detail tabs -->
+                        <div class="border-b border-gray-200 mb-4">
+                            <nav class="flex space-x-6">
+                                <button onclick="showRouterTab('info')" id="tab-info"
+                                    class="router-tab-btn pb-3 border-b-2 border-blue-600 text-blue-600 font-medium text-sm">
+                                    System Info
+                                </button>
+                                <button onclick="showRouterTab('sessions')" id="tab-sessions"
+                                    class="router-tab-btn pb-3 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm">
+                                    Active Sessions
+                                </button>
+                                <button onclick="showRouterTab('hotspot-users')" id="tab-hotspot-users"
+                                    class="router-tab-btn pb-3 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm">
+                                    Hotspot Users
+                                </button>
+                                <button onclick="showRouterTab('setup')" id="tab-setup"
+                                    class="router-tab-btn pb-3 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm">
+                                    <i class="fas fa-terminal mr-1"></i>Setup Script
+                                </button>
+                                <button onclick="showRouterTab('logs')" id="tab-logs"
+                                    class="router-tab-btn pb-3 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm">
+                                    Logs
+                                </button>
+                            </nav>
+                        </div>
+
+                        <!-- System Info Tab -->
+                        <div id="router-tab-info" class="router-tab-content">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                <div class="bg-white rounded-lg shadow p-4">
+                                    <h4 class="font-semibold text-gray-700 mb-3"><i class="fas fa-server mr-2 text-blue-600"></i>System</h4>
+                                    <div id="router-info-system" class="space-y-2 text-sm">
+                                        <p class="text-gray-500">Loading...</p>
+                                    </div>
+                                </div>
+                                <div class="bg-white rounded-lg shadow p-4">
+                                    <h4 class="font-semibold text-gray-700 mb-3"><i class="fas fa-memory mr-2 text-green-600"></i>Resources</h4>
+                                    <div id="router-info-resources" class="space-y-2 text-sm">
+                                        <p class="text-gray-500">Loading...</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="bg-white rounded-lg shadow p-4">
+                                <h4 class="font-semibold text-gray-700 mb-3"><i class="fas fa-ethernet mr-2 text-purple-600"></i>Interfaces</h4>
+                                <div id="router-info-interfaces" class="overflow-x-auto">
+                                    <p class="text-gray-500 text-sm">Loading...</p>
+                                </div>
+                            </div>
+                            <div class="flex space-x-3 mt-4">
+                                <button id="router-detail-test-btn" onclick="testRouterFromDetail()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm">
+                                    <i class="fas fa-plug mr-2"></i>Test Connection
+                                </button>
+                                <button id="router-detail-sync-btn" onclick="syncRouterFromDetail()" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 text-sm">
+                                    <i class="fas fa-sync mr-2"></i>Sync Packages
+                                </button>
+                                <button id="router-detail-edit-btn" onclick="editRouterFromDetail()" class="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 text-sm">
+                                    <i class="fas fa-edit mr-2"></i>Edit Router
+                                </button>
+                                <button id="router-detail-delete-btn" onclick="deleteRouterFromDetail()" class="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 text-sm">
+                                    <i class="fas fa-trash mr-2"></i>Delete
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Sessions Tab -->
+                        <div id="router-tab-sessions" class="router-tab-content hidden">
+                            <div class="flex justify-between items-center mb-3">
+                                <p class="text-sm text-gray-500">Live sessions directly from MikroTik router</p>
+                                <button onclick="refreshRouterSessions()" class="text-sm bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700">
+                                    <i class="fas fa-sync mr-1"></i>Refresh
+                                </button>
+                            </div>
+                            <div class="bg-white rounded-lg shadow overflow-x-auto">
+                                <table class="min-w-full">
+                                    <thead class="bg-gray-50">
+                                        <tr>
+                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">User</th>
+                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">IP Address</th>
+                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">MAC</th>
+                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Uptime</th>
+                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Data In/Out</th>
+                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="router-sessions-tbody" class="divide-y divide-gray-200">
+                                        <tr><td colspan="6" class="px-4 py-4 text-center text-gray-500">Loading sessions...</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Hotspot Users Tab -->
+                        <div id="router-tab-hotspot-users" class="router-tab-content hidden">
+                            <div class="flex justify-between items-center mb-3">
+                                <p class="text-sm text-gray-500">Hotspot user accounts on this router</p>
+                                <button onclick="refreshHotspotUsers()" class="text-sm bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700">
+                                    <i class="fas fa-sync mr-1"></i>Refresh
+                                </button>
+                            </div>
+                            <div class="bg-white rounded-lg shadow overflow-x-auto">
+                                <table class="min-w-full">
+                                    <thead class="bg-gray-50">
+                                        <tr>
+                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Username</th>
+                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Profile</th>
+                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Comment</th>
+                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="router-hotspot-users-tbody" class="divide-y divide-gray-200">
+                                        <tr><td colspan="5" class="px-4 py-4 text-center text-gray-500">Loading users...</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Setup Script Tab -->
+                        <div id="router-tab-setup" class="router-tab-content hidden">
+                            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                                <h4 class="font-semibold text-blue-800 mb-1"><i class="fas fa-info-circle mr-2"></i>How to connect your MikroTik</h4>
+                                <p class="text-sm text-blue-700">Copy the script below and paste it into your MikroTik terminal (via Winbox Terminal or SSH). It configures RADIUS, hotspot redirect, and API access automatically.</p>
+                            </div>
+                            <div id="setup-script-loading" class="text-center py-6 text-gray-400">
+                                <i class="fas fa-spinner fa-spin text-2xl mb-2"></i>
+                                <p>Generating script...</p>
+                            </div>
+                            <div id="setup-script-content" class="hidden">
+                                <div class="flex justify-between items-center mb-2">
+                                    <span class="text-sm font-medium text-gray-700">RouterOS Script</span>
+                                    <button onclick="copySetupScript()" class="text-sm bg-gray-700 text-white px-3 py-1 rounded hover:bg-gray-800">
+                                        <i class="fas fa-copy mr-1"></i>Copy Script
+                                    </button>
+                                </div>
+                                <pre id="setup-script-text"
+                                    class="bg-gray-900 text-green-400 rounded-lg p-4 text-xs font-mono overflow-x-auto whitespace-pre-wrap max-h-96 overflow-y-auto"></pre>
+                                <div class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                                    <div class="bg-white border rounded p-3">
+                                        <p class="font-medium text-gray-700 mb-1"><i class="fas fa-check-circle text-green-500 mr-1"></i>Step 1</p>
+                                        <p class="text-gray-500">Paste the script into MikroTik terminal and run it</p>
+                                    </div>
+                                    <div class="bg-white border rounded p-3">
+                                        <p class="font-medium text-gray-700 mb-1"><i class="fas fa-plug text-blue-500 mr-1"></i>Step 2</p>
+                                        <p class="text-gray-500">Click "Test Connection" on the System Info tab to verify</p>
+                                    </div>
+                                    <div class="bg-white border rounded p-3">
+                                        <p class="font-medium text-gray-700 mb-1"><i class="fas fa-sync text-purple-500 mr-1"></i>Step 3</p>
+                                        <p class="text-gray-500">Click "Sync Packages" to push WiFi packages to the router</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div id="setup-script-error" class="hidden text-center py-6 text-red-500">
+                                <i class="fas fa-exclamation-circle text-2xl mb-2"></i>
+                                <p id="setup-script-error-msg">Failed to generate script</p>
+                            </div>
+                        </div>
+
+                        <!-- Logs Tab -->
+                        <div id="router-tab-logs" class="router-tab-content hidden">
+                            <div class="bg-white rounded-lg shadow overflow-x-auto">
+                                <table class="min-w-full">
+                                    <thead class="bg-gray-50">
+                                        <tr>
+                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Time</th>
+                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Admin</th>
+                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Action</th>
+                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Result</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="router-logs-tbody" class="divide-y divide-gray-200">
+                                        <tr><td colspan="4" class="px-4 py-4 text-center text-gray-500">Loading logs...</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Routers grid (card list) -->
+                    <div id="routers-grid-view">
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="routers-grid">
+                            <p class="text-gray-500">Loading routers...</p>
+                        </div>
                     </div>
                 </div>
 

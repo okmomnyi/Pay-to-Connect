@@ -27,10 +27,21 @@ export const login = async (req: Request, res: Response): Promise<void> => {
             return;
         }
 
+        const isProduction = process.env.NODE_ENV === 'production';
+
+        // Set token in httpOnly cookie — not accessible to JavaScript
+        res.cookie('admin_token', result.token!, {
+            httpOnly: true,
+            secure: isProduction,          // HTTPS only in production
+            sameSite: isProduction ? 'strict' : 'lax',
+            maxAge: 8 * 60 * 60 * 1000,   // 8 hours, matching session duration
+            path: '/'
+        });
+
         res.json({
             success: true,
-            token: result.token,
             admin: result.admin
+            // token intentionally omitted — it lives in the httpOnly cookie
         });
     } catch (error) {
         logger.error('Login controller error:', error);
@@ -43,11 +54,14 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 
 export const logout = async (req: Request, res: Response): Promise<void> => {
     try {
-        const token = req.headers.authorization?.replace('Bearer ', '');
-        
+        const token = req.cookies?.admin_token || req.headers.authorization?.replace('Bearer ', '');
+
         if (token && req.admin) {
             await adminAuthService.logout(token, req.admin.id, req.admin.username);
         }
+
+        // Clear the httpOnly cookie
+        res.clearCookie('admin_token', { path: '/' });
 
         res.json({
             success: true,

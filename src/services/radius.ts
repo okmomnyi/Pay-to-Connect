@@ -103,6 +103,9 @@ class RadiusService {
         LOGIN_LAT_PORT: 63
     };
 
+    private routerCacheExpiry: number = 0;
+    private readonly CACHE_TTL_MS = 60_000; // refresh router list every 60 seconds
+
     constructor() {
         this.db = DatabaseConnection.getInstance();
         this.loadRouters();
@@ -110,8 +113,11 @@ class RadiusService {
 
     private async loadRouters(): Promise<void> {
         try {
-            // Get RADIUS secret from environment
-            const radiusSecret = process.env.RADIUS_SECRET || 'radius-secret';
+            const radiusSecret = process.env.RADIUS_SECRET;
+            if (!radiusSecret) {
+                logger.error('RADIUS_SECRET is not set — no routers will be recognised');
+                return;
+            }
 
             const result = await this.db.query(
                 'SELECT id, ip_address FROM routers WHERE active = true'
@@ -122,14 +128,28 @@ class RadiusService {
                 this.routers.set(router.ip_address, {
                     id: router.id,
                     ip: router.ip_address,
-                    secret: radiusSecret  // Use env variable for all routers
+                    secret: radiusSecret
                 });
             });
 
+            this.routerCacheExpiry = Date.now() + this.CACHE_TTL_MS;
             logger.info(`Loaded ${this.routers.size} active routers`);
         } catch (error) {
             logger.error('Failed to load routers:', error);
         }
+    }
+
+    /** Returns router config, refreshing the in-memory list if the cache is stale. */
+    private async getRouter(remoteAddress: string): Promise<RouterConfig | undefined> {
+        if (Date.now() >= this.routerCacheExpiry) {
+            await this.loadRouters();
+        }
+        return this.routers.get(remoteAddress);
+    }
+
+    /** Call after adding/updating a router so it is immediately recognised. */
+    public async refreshRouters(): Promise<void> {
+        await this.loadRouters();
     }
 
     private createRadiusPacket(code: number, identifier: number, authenticator: Buffer, attributes: RadiusAttribute[]): Buffer {
@@ -320,7 +340,7 @@ class RadiusService {
 
     public async handleRadiusRequest(buffer: Buffer, remoteAddress: string): Promise<Buffer | null> {
         try {
-            const router = this.routers.get(remoteAddress);
+            const router = await this.getRouter(remoteAddress);
             if (!router) {
                 logger.warn(`RADIUS request from unknown router: ${remoteAddress}`);
                 return null;
@@ -499,23 +519,143 @@ class RadiusService {
         try {
             logger.info(`Disconnecting device: ${macAddress}`);
 
-            // Update session to inactive
+            // Find the active session and the router it is connected to
+            const sessionResult = await this.db.query(`
+                SELECT s.id, s.router_ip::text AS router_ip, d.mac_address
+                FROM sessions s
+                JOIN devices d ON s.device_id = d.id
+                WHERE d.mac_address = $1 AND s.active = true
+                LIMIT 1
+            `, [macAddress]);
+
+            // Mark the session inactive in our DB immediately
             await this.db.query(`
                 UPDATE sessions s
                 SET active = false
                 FROM devices d
-                WHERE s.device_id = d.id 
-                AND d.mac_address = $1 
+                WHERE s.device_id = d.id
+                AND d.mac_address = $1
                 AND s.active = true
             `, [macAddress]);
 
-            // In a real implementation, this would send a RADIUS Disconnect-Request
-            // to the NAS/router to immediately terminate the user's session
+            // If we know which router the device is on, send RFC 3576 Disconnect-Request
+            if (sessionResult.rows.length > 0) {
+                const routerIp = sessionResult.rows[0].router_ip;
+                const radiusSecret = process.env.RADIUS_SECRET;
+                if (!radiusSecret) {
+                    logger.error('RADIUS_SECRET is not set — cannot send Disconnect-Request');
+                    return;
+                }
+                try {
+                    await this.sendDisconnectRequest(routerIp, radiusSecret, macAddress);
+                } catch (coaError) {
+                    // Log but don't fail — DB session is already marked inactive;
+                    // the device will be rejected on its next re-auth attempt.
+                    logger.warn(`Disconnect-Request to ${routerIp} failed (will expire on next re-auth):`, coaError);
+                }
+            }
+
             logger.info(`Device ${macAddress} disconnected successfully`);
         } catch (error) {
             logger.error(`Failed to disconnect device ${macAddress}:`, error);
             throw error;
         }
+    }
+
+    /**
+     * Sends an RFC 3576 Disconnect-Request (code 40) to the router's CoA port (3799).
+     * Resolves when the router replies with Disconnect-ACK (41).
+     * Rejects if the router replies with Disconnect-NAK (42) or does not respond within 5 s.
+     */
+    private sendDisconnectRequest(routerIp: string, secret: string, macAddress: string): Promise<void> {
+        return new Promise((resolve, reject) => {
+            const COA_PORT = 3799;
+            const TIMEOUT_MS = 5000;
+            const identifier = Math.floor(Math.random() * 256);
+
+            // Build attributes: Calling-Station-Id (31) = MAC address
+            const macBuf = Buffer.from(macAddress, 'utf8');
+            const attrBuf = Buffer.alloc(2 + macBuf.length);
+            attrBuf.writeUInt8(31, 0);           // Calling-Station-Id type
+            attrBuf.writeUInt8(attrBuf.length, 1);
+            macBuf.copy(attrBuf, 2);
+
+            const totalLength = 20 + attrBuf.length;
+            const packet = Buffer.alloc(totalLength);
+
+            packet.writeUInt8(40, 0);                   // Disconnect-Request
+            packet.writeUInt8(identifier, 1);
+            packet.writeUInt16BE(totalLength, 2);
+            packet.fill(0, 4, 20);                      // Authenticator placeholder = 0x00*16
+            attrBuf.copy(packet, 20);
+
+            // Authenticator = MD5(Code + ID + Length + 0x00*16 + Attrs + Secret)
+            const hash = crypto.createHash('md5');
+            hash.update(packet);
+            hash.update(secret);
+            const authenticator = hash.digest();
+            authenticator.copy(packet, 4);
+
+            const socket = dgram.createSocket('udp4');
+            let settled = false;
+
+            const timer = setTimeout(() => {
+                if (!settled) {
+                    settled = true;
+                    socket.close();
+                    reject(new Error(`Disconnect-Request to ${routerIp}:${COA_PORT} timed out`));
+                }
+            }, TIMEOUT_MS);
+
+            socket.on('message', (msg) => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(timer);
+                socket.close();
+
+                const code = msg.readUInt8(0);
+                if (code === 41) {
+                    // Disconnect-ACK
+                    resolve();
+                } else {
+                    // Disconnect-NAK (42) or unexpected code
+                    const replyAttrStart = 20;
+                    let replyMsg = `NAK (code ${code})`;
+                    if (msg.length > replyAttrStart) {
+                        // Try to extract Reply-Message (type 18) for diagnostics
+                        let off = replyAttrStart;
+                        while (off + 2 <= msg.length) {
+                            const aType = msg.readUInt8(off);
+                            const aLen = msg.readUInt8(off + 1);
+                            if (aType === 18 && aLen > 2) {
+                                replyMsg = msg.slice(off + 2, off + aLen).toString('utf8');
+                                break;
+                            }
+                            off += Math.max(aLen, 2);
+                        }
+                    }
+                    reject(new Error(`Disconnect-NAK from ${routerIp}: ${replyMsg}`));
+                }
+            });
+
+            socket.on('error', (err) => {
+                if (!settled) {
+                    settled = true;
+                    clearTimeout(timer);
+                    socket.close();
+                    reject(err);
+                }
+            });
+
+            socket.send(packet, COA_PORT, routerIp, (err) => {
+                if (err && !settled) {
+                    settled = true;
+                    clearTimeout(timer);
+                    socket.close();
+                    reject(err);
+                }
+            });
+        });
     }
 }
 

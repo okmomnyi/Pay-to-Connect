@@ -1,6 +1,7 @@
 import { Pool, PoolClient } from 'pg';
 import { createClient, RedisClientType } from 'redis';
 import dotenv from 'dotenv';
+import { logger } from '../utils/logger';
 
 dotenv.config();
 
@@ -20,9 +21,9 @@ class DatabaseConnection {
             max: 20,
             idleTimeoutMillis: 30000,
             connectionTimeoutMillis: 30000,
-            ssl: {
-                rejectUnauthorized: false
-            }
+            ssl: process.env.DB_SSL === 'false'
+                ? false
+                : { rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false' }
         });
 
         // Make Redis optional - only initialize if explicitly enabled
@@ -34,24 +35,24 @@ class DatabaseConnection {
                 });
 
                 this.redisClient.on('error', (err) => {
-                    console.warn('Redis Client Error (Redis is optional):', err);
+                    logger.warn('Redis Client Error (Redis is optional):', err);
                 });
 
                 this.redisClient.connect()
                     .then(() => {
                         this.redisEnabled = true;
-                        console.log('Redis connected successfully');
+                        logger.info('Redis connected successfully');
                     })
                     .catch((err) => {
-                        console.warn('Redis connection failed, continuing without Redis:', err);
+                        logger.warn('Redis connection failed, continuing without Redis:', { error: err.message });
                         this.redisClient = null;
                     });
             } catch (error) {
-                console.warn('Failed to initialize Redis, continuing without it:', error);
+                logger.warn('Failed to initialize Redis, continuing without it:', error);
                 this.redisClient = null;
             }
         } else {
-            console.log('Redis is disabled, using PostgreSQL only');
+            logger.info('Redis is disabled, using PostgreSQL only');
         }
     }
 

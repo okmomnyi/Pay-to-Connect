@@ -164,32 +164,22 @@ class MpesaService {
         return cleaned;
     }
 
-    public async initiateSTKPush(phone: string, amount: number, accountReference: string): Promise<{ success: boolean; checkoutRequestId?: string; error?: string }> {
+    // Initiate STK Push. The caller must create the payment record first and pass its ID.
+    // This function only talks to Safaricom and updates the payment with the checkoutRequestId.
+    public async initiateSTKPush(paymentId: string, phone: string, amount: number, accountReference: string): Promise<{ success: boolean; checkoutRequestId?: string; error?: string }> {
         try {
-            // Check if M-Pesa is configured
             if (!this.isConfigured) {
                 logger.error('M-Pesa STK Push attempted but M-Pesa is not configured');
-                return {
-                    success: false,
-                    error: 'Payment service is not configured. Please contact support.'
-                };
+                return { success: false, error: 'Payment service is not configured. Please contact support.' };
             }
 
-            // Validate phone number
             if (!this.validatePhoneNumber(phone)) {
                 logger.warn(`Invalid phone number attempted: ${phone}`);
-                return {
-                    success: false,
-                    error: 'Invalid phone number. Please use a valid Safaricom number.'
-                };
+                return { success: false, error: 'Invalid phone number. Please use a valid Safaricom number.' };
             }
 
-            // Validate amount
             if (amount < 1 || amount > 250000) {
-                return {
-                    success: false,
-                    error: 'Amount must be between KES 1 and KES 250,000'
-                };
+                return { success: false, error: 'Amount must be between KES 1 and KES 250,000' };
             }
 
             logger.info(`Initiating STK Push - Phone: ${phone}, Amount: ${amount}, Ref: ${accountReference}`);
@@ -198,23 +188,19 @@ class MpesaService {
             const { password, timestamp } = this.generatePassword();
             const formattedPhone = this.formatPhoneNumber(phone);
 
-            logger.info(`Formatted phone for STK Push: ${formattedPhone}`);
-
             const stkPushData: STKPushRequest = {
                 BusinessShortCode: this.shortcode,
                 Password: password,
                 Timestamp: timestamp,
                 TransactionType: 'CustomerPayBillOnline',
-                Amount: amount,
+                Amount: Math.ceil(amount), // M-Pesa requires integer amounts
                 PartyA: formattedPhone,
                 PartyB: this.shortcode,
                 PhoneNumber: formattedPhone,
                 CallBackURL: this.callbackUrl,
                 AccountReference: accountReference,
-                TransactionDesc: `WiFi Access`
+                TransactionDesc: 'WiFi Access'
             };
-
-            logger.info(`Sending STK Push request to ${this.baseUrl}/mpesa/stkpush/v1/processrequest`);
 
             const response = await axios.post(
                 `${this.baseUrl}/mpesa/stkpush/v1/processrequest`,
@@ -224,58 +210,41 @@ class MpesaService {
                         'Authorization': `Bearer ${accessToken}`,
                         'Content-Type': 'application/json'
                     },
-                    timeout: 30000 // 30 second timeout
+                    timeout: 30000
                 }
             );
 
             const result: STKPushResponse = response.data;
 
-            logger.info(`STK Push API Response:`, {
+            logger.info('STK Push API Response:', {
                 ResponseCode: result.ResponseCode,
                 ResponseDescription: result.ResponseDescription,
-                CheckoutRequestID: result.CheckoutRequestID,
-                MerchantRequestID: result.MerchantRequestID
+                CheckoutRequestID: result.CheckoutRequestID
             });
 
             if (result.ResponseCode === '0') {
-                try {
-                    // Try to store payment record - handle database failure gracefully
-                    await this.db.query(
-                        `INSERT INTO payments (phone, amount, mpesa_checkout_request_id, status) 
-                         VALUES ($1, $2, $3, $4)`,
-                        [phone, amount, result.CheckoutRequestID, 'pending']
-                    );
-                    logger.info(`STK Push initiated successfully for ${phone}, CheckoutRequestID: ${result.CheckoutRequestID}`);
-                } catch (dbError) {
-                    logger.warn('Failed to store payment record in database (will continue without storing):', dbError);
-                }
-
-                return {
-                    success: true,
-                    checkoutRequestId: result.CheckoutRequestID
-                };
+                // Save the checkoutRequestId to the pre-created payment record
+                await this.db.query(
+                    `UPDATE payments SET mpesa_checkout_request_id = $1, updated_at = NOW() WHERE id = $2`,
+                    [result.CheckoutRequestID, paymentId]
+                );
+                logger.info(`STK Push initiated for payment ${paymentId}, CheckoutRequestID: ${result.CheckoutRequestID}`);
+                return { success: true, checkoutRequestId: result.CheckoutRequestID };
             } else {
+                await this.db.query(
+                    `UPDATE payments SET status = 'failed', updated_at = NOW() WHERE id = $1`,
+                    [paymentId]
+                );
                 logger.error(`STK Push failed: ${result.ResponseDescription}`);
-                return {
-                    success: false,
-                    error: result.ResponseDescription
-                };
+                return { success: false, error: result.ResponseDescription };
             }
-        } catch (error) {
+        } catch (error: any) {
             logger.error('STK Push initiation failed:', error);
-
-            // Check if error is related to database connection
-            if (error instanceof Error && (error.message.includes('ECONNREFUSED') || error.message.includes('connect'))) {
-                return {
-                    success: false,
-                    error: 'Unable to connect to database. Please try again later.'
-                };
-            }
-
-            return {
-                success: false,
-                error: 'Failed to initiate payment. Please try again.'
-            };
+            await this.db.query(
+                `UPDATE payments SET status = 'failed', updated_at = NOW() WHERE id = $1`,
+                [paymentId]
+            ).catch(() => {}); // best-effort
+            return { success: false, error: 'Failed to initiate payment. Please try again.' };
         }
     }
 

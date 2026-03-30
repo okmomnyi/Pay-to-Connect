@@ -171,7 +171,7 @@ async function saveSecurityQuestions() {
                 showAlert('Please fill in all security questions', 'error');
                 return;
             }
-            answers.push({ question_id: parseInt(questionId), answer: answer });
+            answers.push({ question_id: questionId, answer: answer });
         }
 
         const response = await fetch(`${API_BASE}/security-answers`, {

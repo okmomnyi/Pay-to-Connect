@@ -7,6 +7,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
+import cookieParser from 'cookie-parser';
 import { join } from 'path';
 
 import DatabaseConnection from './database/connection';
@@ -47,7 +48,7 @@ class Server {
                     scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://cdn.tailwindcss.com"],
                     scriptSrcAttr: ["'unsafe-inline'"],
                     imgSrc: ["'self'", "data:", "https:"],
-                    connectSrc: ["'self'", "http://localhost:3000", "https://localhost:3000"],
+                    connectSrc: ["'self'"],
                     fontSrc: ["'self'", "https://cdnjs.cloudflare.com", "data:"],
                     objectSrc: ["'none'"],
                     mediaSrc: ["'self'"],
@@ -66,9 +67,37 @@ class Server {
             xssFilter: true,
         }));
 
-        // CORS configuration
+        // CORS configuration — never default to wildcard
+        const allowedOrigins = process.env.CORS_ORIGIN
+            ? process.env.CORS_ORIGIN.split(',').map(o => o.trim()).filter(Boolean)
+            : [];
+
+        // Build the list of the server's own origins so same-origin requests are
+        // always allowed even when CORS_ORIGIN is set to a specific domain.
+        const port = process.env.PORT || '3000';
+        const serverHost = process.env.SERVER_HOST;
+        const selfOrigins = [
+            `http://localhost:${port}`,
+            `https://localhost:${port}`,
+            `http://127.0.0.1:${port}`,
+            `https://127.0.0.1:${port}`,
+            ...(serverHost ? [`http://${serverHost}`, `https://${serverHost}`] : [])
+        ];
+
         this.app.use(cors({
-            origin: process.env.CORS_ORIGIN || '*',
+            origin: (origin, callback) => {
+                // Allow requests with no origin (mobile apps, curl, Postman)
+                if (!origin) return callback(null, true);
+                // Allow when no restriction is configured
+                if (allowedOrigins.length === 0) return callback(null, true);
+                // Allow explicitly listed origins
+                if (allowedOrigins.includes(origin)) return callback(null, true);
+                // Always allow same-server origins (prevents 500 for same-origin browser requests)
+                if (selfOrigins.includes(origin)) return callback(null, true);
+                // Blocked — do NOT pass an Error (that triggers next(error) → 500).
+                // Return false so cors() skips setting headers; the browser enforces CORS.
+                return callback(null, false);
+            },
             credentials: true,
             methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
             allowedHeaders: ['Content-Type', 'Authorization']
@@ -87,6 +116,9 @@ class Server {
         });
 
         this.app.use(generalLimiter);
+
+        // Cookie parsing (required for httpOnly auth tokens)
+        this.app.use(cookieParser());
 
         // Body parsing middleware
         this.app.use(express.json({ limit: '10mb' }));

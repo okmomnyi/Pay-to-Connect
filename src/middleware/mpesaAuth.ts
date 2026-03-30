@@ -23,8 +23,10 @@ export const validateMpesaCallback = (req: Request, res: Response, next: NextFun
         const realIP = forwardedFor ? (Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor.split(',')[0]) : clientIP;
 
         if (process.env.NODE_ENV === 'production') {
-            const isValidIP = mpesaIPs.some(ip => realIP.includes(ip));
-            
+            // Use exact match, not .includes(), to prevent partial-IP spoofing
+            const cleanIP = realIP.trim();
+            const isValidIP = mpesaIPs.includes(cleanIP);
+
             if (!isValidIP) {
                 logger.warn('M-Pesa callback from unauthorized IP:', { ip: realIP });
                 res.status(403).json({

@@ -1,6 +1,5 @@
 // Admin Panel JavaScript - Production Ready
 const API_BASE = '/api/admin';
-let authToken = null;
 let currentAdmin = null;
 let dashboardInterval = null;
 
@@ -30,12 +29,9 @@ document.getElementById('login-form')?.addEventListener('submit', async (e) => {
 
         const data = await response.json();
 
-        console.log('Login response:', data);
-
         if (data.success) {
-            authToken = data.token;
+            // Token is stored in an httpOnly cookie by the server — not accessible here
             currentAdmin = data.admin;
-            localStorage.setItem('admin_token', authToken);
             localStorage.setItem('admin_user', JSON.stringify(currentAdmin));
 
             showToast('Login successful!', 'success');
@@ -57,12 +53,10 @@ async function logout() {
     try {
         await apiCall('/auth/logout', 'POST');
     } catch (error) {
-        // Ignore errors on logout
+        // Ignore errors on logout — cookie is still cleared by the server response
     }
 
-    authToken = null;
     currentAdmin = null;
-    localStorage.removeItem('admin_token');
     localStorage.removeItem('admin_user');
 
     if (dashboardInterval) {
@@ -82,27 +76,26 @@ function showAdminPanel() {
     startDashboardRefresh();
 }
 
-// Check for existing session on page load
+// Check for existing session on page load by verifying the httpOnly cookie with the server
 window.addEventListener('DOMContentLoaded', async () => {
-    const token = localStorage.getItem('admin_token');
-    const admin = localStorage.getItem('admin_user');
+    const cached = localStorage.getItem('admin_user');
+    if (cached) {
+        currentAdmin = JSON.parse(cached);
+    }
 
-    if (token && admin) {
-        authToken = token;
-        currentAdmin = JSON.parse(admin);
-
-        try {
-            const response = await apiCall('/auth/me');
-            if (response.success) {
-                currentAdmin = response.admin;
-                localStorage.setItem('admin_user', JSON.stringify(currentAdmin));
-                showAdminPanel();
-            } else {
-                logout();
-            }
-        } catch (error) {
-            logout();
+    try {
+        // Cookie is sent automatically — server validates it
+        const response = await apiCall('/auth/me');
+        if (response.success) {
+            currentAdmin = response.admin;
+            localStorage.setItem('admin_user', JSON.stringify(currentAdmin));
+            showAdminPanel();
+        } else {
+            localStorage.removeItem('admin_user');
+            // Already on login page — do nothing
         }
+    } catch (error) {
+        localStorage.removeItem('admin_user');
     }
 });
 
@@ -113,10 +106,8 @@ window.addEventListener('DOMContentLoaded', async () => {
 async function apiCall(endpoint, method = 'GET', body = null) {
     const options = {
         method,
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${authToken}`
-        }
+        credentials: 'same-origin',  // Send httpOnly cookie automatically
+        headers: { 'Content-Type': 'application/json' }
     };
 
     if (body) {
@@ -127,7 +118,11 @@ async function apiCall(endpoint, method = 'GET', body = null) {
     const data = await response.json();
 
     if (response.status === 401) {
-        logout();
+        localStorage.removeItem('admin_user');
+        currentAdmin = null;
+        document.getElementById('admin-panel').classList.add('hidden');
+        document.getElementById('login-page').classList.remove('hidden');
+        showToast('Session expired — please log in again', 'error');
         throw new Error('Session expired');
     }
 
@@ -258,122 +253,589 @@ function startDashboardRefresh() {
 // ROUTERS MANAGEMENT
 // =====================================================
 
+let currentRouterId = null;
+let currentRouterTab = 'info';
+
 async function loadRouters() {
     try {
         const response = await apiCall('/routers');
+        const grid = document.getElementById('routers-grid');
 
-        if (response.success) {
-            const grid = document.getElementById('routers-grid');
+        if (!response.success) throw new Error(response.error);
 
-            if (response.routers.length === 0) {
-                grid.innerHTML = '<p class="text-gray-500 col-span-3">No routers found</p>';
-                return;
-            }
-
-            grid.innerHTML = response.routers.map(router => `
-                <div class="bg-white p-6 rounded-lg shadow">
-                    <div class="flex items-center justify-between mb-4">
-                        <h3 class="text-lg font-bold">${router.name}</h3>
-                        <span class="px-2 py-1 text-xs rounded ${router.connection_status === 'online' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                }">
-                            ${router.connection_status}
-                        </span>
-                    </div>
-                    <p class="text-sm text-gray-600 mb-2">
-                        <i class="fas fa-network-wired mr-2"></i>${router.ip_address}:${router.api_port}
-                    </p>
-                    <p class="text-sm text-gray-600 mb-2">
-                        <i class="fas fa-building mr-2"></i>${router.estate_name || 'No estate'}
-                    </p>
-                    <p class="text-sm text-gray-600 mb-4">
-                        <i class="fas fa-sync mr-2"></i>Last sync: ${router.last_sync_at ? formatDate(router.last_sync_at) : 'Never'}
-                    </p>
-                    <div class="flex space-x-2">
-                        <button onclick="testRouter('${router.id}')" 
-                            class="flex-1 bg-blue-600 text-white px-3 py-2 rounded text-sm hover:bg-blue-700">
-                            <i class="fas fa-plug mr-1"></i>Test
-                        </button>
-                        <button onclick="syncRouter('${router.id}')" 
-                            class="flex-1 bg-green-600 text-white px-3 py-2 rounded text-sm hover:bg-green-700">
-                            <i class="fas fa-sync mr-1"></i>Sync
-                        </button>
-                        <button onclick="editRouter('${router.id}')" 
-                            class="flex-1 bg-gray-600 text-white px-3 py-2 rounded text-sm hover:bg-gray-700">
-                            <i class="fas fa-edit mr-1"></i>Edit
-                        </button>
-                    </div>
-                </div>
-            `).join('');
+        if (response.routers.length === 0) {
+            grid.innerHTML = '<p class="text-gray-500 col-span-3">No routers found. Click "Add Router" to connect your first MikroTik.</p>';
+            return;
         }
+
+        grid.innerHTML = response.routers.map(router => {
+            const statusColor = router.connection_status === 'online'
+                ? 'bg-green-100 text-green-800'
+                : router.connection_status === 'offline'
+                    ? 'bg-red-100 text-red-800'
+                    : 'bg-gray-100 text-gray-600';
+
+            const syncColor = router.sync_status === 'success'
+                ? 'text-green-600'
+                : router.sync_status === 'failed'
+                    ? 'text-red-600'
+                    : 'text-gray-400';
+
+            return `
+            <div class="bg-white p-6 rounded-lg shadow hover:shadow-md transition-shadow cursor-pointer"
+                 onclick="openRouterDetail('${router.id}', '${escapeHtml(router.name)}')">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-lg font-bold text-gray-900 truncate">${escapeHtml(router.name)}</h3>
+                    <span class="px-2 py-1 text-xs rounded-full font-medium ${statusColor}">
+                        ${router.connection_status || 'unknown'}
+                    </span>
+                </div>
+                <div class="space-y-2 text-sm text-gray-600 mb-4">
+                    <p><i class="fas fa-network-wired mr-2 text-blue-500"></i>${escapeHtml(router.ip_address)}:${router.api_port}</p>
+                    <p><i class="fas fa-building mr-2 text-purple-500"></i>${escapeHtml(router.estate_name || 'No estate assigned')}</p>
+                    <p class="${syncColor}">
+                        <i class="fas fa-sync mr-2"></i>
+                        ${router.sync_status === 'success' ? `Synced ${router.packages_synced || 0} packages` : router.sync_status === 'failed' ? 'Sync failed' : 'Never synced'}
+                        ${router.last_sync_at ? ' · ' + formatDate(router.last_sync_at) : ''}
+                    </p>
+                </div>
+                <div class="flex space-x-2" onclick="event.stopPropagation()">
+                    <button onclick="testRouter('${router.id}')"
+                        class="flex-1 bg-blue-600 text-white px-3 py-1.5 rounded text-xs hover:bg-blue-700">
+                        <i class="fas fa-plug mr-1"></i>Test
+                    </button>
+                    <button onclick="syncRouter('${router.id}')"
+                        class="flex-1 bg-green-600 text-white px-3 py-1.5 rounded text-xs hover:bg-green-700">
+                        <i class="fas fa-sync mr-1"></i>Sync
+                    </button>
+                    <button onclick="openRouterDetail('${router.id}', '${escapeHtml(router.name)}')"
+                        class="flex-1 bg-gray-600 text-white px-3 py-1.5 rounded text-xs hover:bg-gray-700">
+                        <i class="fas fa-cog mr-1"></i>Manage
+                    </button>
+                </div>
+            </div>`;
+        }).join('');
     } catch (error) {
+        document.getElementById('routers-grid').innerHTML =
+            '<p class="text-red-500 col-span-3">Error loading routers</p>';
         showToast('Failed to load routers', 'error');
     }
 }
 
-async function testRouter(routerId) {
+function openRouterDetail(routerId, routerName) {
+    currentRouterId = routerId;
+    document.getElementById('router-detail-name').textContent = routerName;
+    document.getElementById('routers-grid-view').classList.add('hidden');
+    document.getElementById('router-detail-view').classList.remove('hidden');
+    showRouterTab('info');
+    loadRouterSystemInfo();
+}
+
+function closeRouterDetail() {
+    currentRouterId = null;
+    document.getElementById('router-detail-view').classList.add('hidden');
+    document.getElementById('routers-grid-view').classList.remove('hidden');
+}
+
+function showRouterTab(tab) {
+    currentRouterTab = tab;
+    document.querySelectorAll('.router-tab-content').forEach(el => el.classList.add('hidden'));
+    document.querySelectorAll('.router-tab-btn').forEach(btn => {
+        btn.classList.remove('border-blue-600', 'text-blue-600');
+        btn.classList.add('border-transparent', 'text-gray-500');
+    });
+
+    document.getElementById(`router-tab-${tab}`).classList.remove('hidden');
+    const activeBtn = document.getElementById(`tab-${tab}`);
+    activeBtn.classList.add('border-blue-600', 'text-blue-600');
+    activeBtn.classList.remove('border-transparent', 'text-gray-500');
+
+    switch (tab) {
+        case 'info': loadRouterSystemInfo(); break;
+        case 'sessions': refreshRouterSessions(); break;
+        case 'hotspot-users': refreshHotspotUsers(); break;
+        case 'setup': loadRouterSetupScript(); break;
+        case 'logs': loadRouterLogs(); break;
+    }
+}
+
+async function loadRouterSystemInfo() {
+    if (!currentRouterId) return;
+
+    document.getElementById('router-info-system').innerHTML = '<p class="text-gray-400">Connecting...</p>';
+    document.getElementById('router-info-resources').innerHTML = '<p class="text-gray-400">Connecting...</p>';
+    document.getElementById('router-info-interfaces').innerHTML = '<p class="text-gray-400">Connecting...</p>';
+
+    try {
+        const response = await apiCall(`/routers/${currentRouterId}/info`);
+        const badge = document.getElementById('router-detail-status-badge');
+
+        if (response.success && response.info) {
+            const info = response.info;
+            badge.textContent = 'Online';
+            badge.className = 'ml-3 px-3 py-1 text-sm rounded-full bg-green-100 text-green-700';
+
+            const memUsed = parseInt(info.memory_total) - parseInt(info.memory_free);
+            const memPct = info.memory_total > 0 ? Math.round(memUsed / parseInt(info.memory_total) * 100) : 0;
+
+            document.getElementById('router-info-system').innerHTML = `
+                <div class="flex justify-between"><span class="text-gray-500">Identity</span><span class="font-medium">${escapeHtml(info.identity)}</span></div>
+                <div class="flex justify-between"><span class="text-gray-500">RouterOS</span><span class="font-medium">${escapeHtml(info.version)}</span></div>
+                <div class="flex justify-between"><span class="text-gray-500">Board</span><span class="font-medium">${escapeHtml(info.board_name)}</span></div>
+                <div class="flex justify-between"><span class="text-gray-500">Architecture</span><span class="font-medium">${escapeHtml(info.architecture)}</span></div>
+                <div class="flex justify-between"><span class="text-gray-500">Uptime</span><span class="font-medium">${escapeHtml(info.uptime)}</span></div>
+            `;
+
+            document.getElementById('router-info-resources').innerHTML = `
+                <div class="flex justify-between"><span class="text-gray-500">CPU Load</span><span class="font-medium ${parseInt(info.cpu_load) > 80 ? 'text-red-600' : 'text-green-600'}">${info.cpu_load}%</span></div>
+                <div class="mb-1"><span class="text-gray-500">RAM Usage</span></div>
+                <div class="w-full bg-gray-200 rounded-full h-2 mb-2">
+                    <div class="bg-blue-600 h-2 rounded-full" style="width:${memPct}%"></div>
+                </div>
+                <div class="text-xs text-gray-500">${formatBytes(memUsed)} / ${formatBytes(parseInt(info.memory_total))} (${memPct}%)</div>
+            `;
+
+            if (info.interfaces && info.interfaces.length > 0) {
+                document.getElementById('router-info-interfaces').innerHTML = `
+                    <table class="min-w-full text-sm">
+                        <thead><tr class="text-left text-gray-500">
+                            <th class="py-1 pr-4">Name</th>
+                            <th class="py-1 pr-4">Type</th>
+                            <th class="py-1 pr-4">MAC</th>
+                            <th class="py-1">Status</th>
+                        </tr></thead>
+                        <tbody>
+                            ${info.interfaces.map(iface => `
+                                <tr class="border-t border-gray-100">
+                                    <td class="py-1 pr-4 font-medium">${escapeHtml(iface.name)}</td>
+                                    <td class="py-1 pr-4 text-gray-500">${escapeHtml(iface.type || '-')}</td>
+                                    <td class="py-1 pr-4 text-gray-500 font-mono text-xs">${escapeHtml(iface.mac_address || '-')}</td>
+                                    <td class="py-1">
+                                        <span class="px-1.5 py-0.5 rounded text-xs ${iface.running ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}">
+                                            ${iface.running ? 'Running' : iface.disabled ? 'Disabled' : 'Down'}
+                                        </span>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>`;
+            } else {
+                document.getElementById('router-info-interfaces').innerHTML = '<p class="text-gray-400 text-sm">No interfaces found</p>';
+            }
+        } else {
+            badge.textContent = 'Offline';
+            badge.className = 'ml-3 px-3 py-1 text-sm rounded-full bg-red-100 text-red-700';
+            const errMsg = `<p class="text-red-500 text-sm">${escapeHtml(response.error || 'Connection failed')}</p>`;
+            document.getElementById('router-info-system').innerHTML = errMsg;
+            document.getElementById('router-info-resources').innerHTML = '<p class="text-gray-400 text-sm">-</p>';
+            document.getElementById('router-info-interfaces').innerHTML = '<p class="text-gray-400 text-sm">-</p>';
+        }
+    } catch (error) {
+        document.getElementById('router-info-system').innerHTML = '<p class="text-red-500 text-sm">Failed to load info</p>';
+    }
+}
+
+let _cachedSetupScript = null;
+
+async function loadRouterSetupScript() {
+    if (!currentRouterId) return;
+
+    // Reset UI
+    document.getElementById('setup-script-loading').classList.remove('hidden');
+    document.getElementById('setup-script-content').classList.add('hidden');
+    document.getElementById('setup-script-error').classList.add('hidden');
+    _cachedSetupScript = null;
+
+    try {
+        const response = await apiCall(`/routers/${currentRouterId}/setup-script`);
+
+        if (response.success) {
+            _cachedSetupScript = response.script;
+            document.getElementById('setup-script-text').textContent = response.script;
+            document.getElementById('setup-script-loading').classList.add('hidden');
+            document.getElementById('setup-script-content').classList.remove('hidden');
+        } else {
+            throw new Error(response.error || 'Failed to generate script');
+        }
+    } catch (error) {
+        document.getElementById('setup-script-loading').classList.add('hidden');
+        document.getElementById('setup-script-error-msg').textContent = error.message || 'Failed to generate setup script';
+        document.getElementById('setup-script-error').classList.remove('hidden');
+    }
+}
+
+async function copySetupScript() {
+    if (!_cachedSetupScript) return;
+    try {
+        await navigator.clipboard.writeText(_cachedSetupScript);
+        showToast('Script copied to clipboard!', 'success');
+    } catch (e) {
+        // Fallback for browsers without clipboard API
+        const el = document.createElement('textarea');
+        el.value = _cachedSetupScript;
+        document.body.appendChild(el);
+        el.select();
+        document.execCommand('copy');
+        document.body.removeChild(el);
+        showToast('Script copied!', 'success');
+    }
+}
+
+async function refreshRouterSessions() {
+    if (!currentRouterId) return;
+    const tbody = document.getElementById('router-sessions-tbody');
+    tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-4 text-center text-gray-400">Loading...</td></tr>';
+
+    try {
+        const response = await apiCall(`/routers/${currentRouterId}/sessions`);
+
+        if (!response.success) throw new Error(response.error);
+
+        if (!response.sessions || response.sessions.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-4 text-center text-gray-500">No active sessions on this router</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = response.sessions.map(s => `
+            <tr class="hover:bg-gray-50">
+                <td class="px-4 py-3 text-sm font-medium">${escapeHtml(s.user || '-')}</td>
+                <td class="px-4 py-3 text-sm text-gray-600">${escapeHtml(s.address || '-')}</td>
+                <td class="px-4 py-3 text-sm font-mono text-xs text-gray-600">${escapeHtml(s.mac_address || '-')}</td>
+                <td class="px-4 py-3 text-sm text-gray-600">${escapeHtml(s.uptime || '-')}</td>
+                <td class="px-4 py-3 text-sm text-gray-600">
+                    ↓ ${formatBytes(parseInt(s.bytes_in) || 0)} / ↑ ${formatBytes(parseInt(s.bytes_out) || 0)}
+                </td>
+                <td class="px-4 py-3">
+                    <button onclick="kickRouterUser('${escapeHtml(s.user)}')"
+                        class="bg-red-600 text-white px-2 py-1 rounded text-xs hover:bg-red-700">
+                        <i class="fas fa-times mr-1"></i>Kick
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+    } catch (error) {
+        tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-3 text-center text-red-500 text-sm">Failed to load sessions</td></tr>';
+    }
+}
+
+async function refreshHotspotUsers() {
+    if (!currentRouterId) return;
+    const tbody = document.getElementById('router-hotspot-users-tbody');
+    tbody.innerHTML = '<tr><td colspan="5" class="px-4 py-4 text-center text-gray-400">Loading...</td></tr>';
+
+    try {
+        const response = await apiCall(`/routers/${currentRouterId}/hotspot-users`);
+
+        if (!response.success) throw new Error(response.error);
+
+        if (!response.users || response.users.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="px-4 py-4 text-center text-gray-500">No hotspot users on this router</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = response.users.map(u => `
+            <tr class="hover:bg-gray-50">
+                <td class="px-4 py-3 text-sm font-medium">${escapeHtml(u.name)}</td>
+                <td class="px-4 py-3 text-sm text-gray-600">${escapeHtml(u.profile || '-')}</td>
+                <td class="px-4 py-3">
+                    <span class="px-2 py-0.5 rounded-full text-xs ${u.disabled ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}">
+                        ${u.disabled ? 'Disabled' : 'Active'}
+                    </span>
+                </td>
+                <td class="px-4 py-3 text-sm text-gray-500">${escapeHtml(u.comment || '-')}</td>
+                <td class="px-4 py-3">
+                    <button onclick="kickRouterUser('${escapeHtml(u.name)}')"
+                        class="bg-red-600 text-white px-2 py-1 rounded text-xs hover:bg-red-700 mr-1">
+                        <i class="fas fa-wifi mr-1"></i>Disconnect
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+    } catch (error) {
+        tbody.innerHTML = '<tr><td colspan="5" class="px-4 py-3 text-center text-red-500 text-sm">Failed to load users</td></tr>';
+    }
+}
+
+async function loadRouterLogs() {
+    if (!currentRouterId) return;
+    const tbody = document.getElementById('router-logs-tbody');
+    tbody.innerHTML = '<tr><td colspan="4" class="px-4 py-4 text-center text-gray-400">Loading...</td></tr>';
+
+    try {
+        const response = await apiCall(`/routers/${currentRouterId}/logs?limit=50`);
+
+        if (!response.success) throw new Error(response.error);
+
+        if (!response.logs || response.logs.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" class="px-4 py-4 text-center text-gray-500">No logs for this router</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = response.logs.map(log => `
+            <tr class="hover:bg-gray-50">
+                <td class="px-4 py-3 text-xs text-gray-500">${formatDate(log.created_at)}</td>
+                <td class="px-4 py-3 text-sm">${escapeHtml(log.username || 'System')}</td>
+                <td class="px-4 py-3 text-sm text-gray-700">${escapeHtml(log.action_type || '-')}</td>
+                <td class="px-4 py-3">
+                    <span class="px-1.5 py-0.5 rounded text-xs ${log.success ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">
+                        ${log.success ? 'OK' : 'Failed'}
+                    </span>
+                </td>
+            </tr>
+        `).join('');
+    } catch (error) {
+        tbody.innerHTML = '<tr><td colspan="4" class="px-4 py-3 text-center text-red-500 text-sm">Failed to load logs</td></tr>';
+    }
+}
+
+async function kickRouterUser(username) {
+    if (!currentRouterId) return;
+    if (!confirm(`Disconnect user "${username}" from this router?`)) return;
+
+    try {
+        const response = await apiCall(`/routers/${currentRouterId}/disconnect`, 'POST', { username });
+        if (response.success) {
+            showToast(response.message || 'User disconnected', 'success');
+            if (currentRouterTab === 'sessions') refreshRouterSessions();
+            if (currentRouterTab === 'hotspot-users') refreshHotspotUsers();
+        } else {
+            showToast(response.message || 'Failed to disconnect user', 'error');
+        }
+    } catch (error) {
+        showToast('Failed to disconnect user', 'error');
+    }
+}
+
+function testRouterFromDetail() {
+    if (currentRouterId) testRouter(currentRouterId, true);
+}
+
+function syncRouterFromDetail() {
+    if (currentRouterId) syncRouter(currentRouterId, true);
+}
+
+function editRouterFromDetail() {
+    if (currentRouterId) editRouter(currentRouterId);
+}
+
+function deleteRouterFromDetail() {
+    if (currentRouterId) deleteRouter(currentRouterId);
+}
+
+async function testRouter(routerId, fromDetail = false) {
     showToast('Testing router connection...', 'info');
 
     try {
         const response = await apiCall(`/routers/${routerId}/test`, 'POST');
-
         if (response.success) {
-            showToast('Router connection successful', 'success');
-            loadRouters();
+            showToast('Connection successful!', 'success');
         } else {
             showToast(response.message || 'Connection test failed', 'error');
         }
+        if (fromDetail) loadRouterSystemInfo();
+        else loadRouters();
     } catch (error) {
         showToast('Failed to test router', 'error');
     }
 }
 
-async function syncRouter(routerId) {
+async function syncRouter(routerId, fromDetail = false) {
     showToast('Syncing packages to router...', 'info');
 
     try {
         const response = await apiCall(`/routers/${routerId}/sync`, 'POST');
-
         if (response.success) {
-            showToast(`Successfully synced ${response.synced} packages`, 'success');
-            loadRouters();
+            showToast(`Synced ${response.synced || 0} packages successfully`, 'success');
         } else {
             showToast(response.message || 'Sync failed', 'error');
         }
+        if (!fromDetail) loadRouters();
     } catch (error) {
         showToast('Failed to sync router', 'error');
     }
 }
 
-function showAddRouterModal() {
-    const modal = createModal('Add Router', `
-        <form id="add-router-form">
+async function deleteRouter(routerId) {
+    if (!confirm('Delete this router? This cannot be undone. All associated credentials will be removed.')) return;
+
+    try {
+        const response = await apiCall(`/routers/${routerId}`, 'DELETE');
+        if (response.success) {
+            showToast('Router deleted', 'success');
+            closeRouterDetail();
+            loadRouters();
+        } else {
+            showToast(response.error || 'Failed to delete router', 'error');
+        }
+    } catch (error) {
+        showToast('Failed to delete router', 'error');
+    }
+}
+
+async function editRouter(routerId) {
+    // Load current router data
+    let router;
+    try {
+        const response = await apiCall(`/routers/${routerId}`);
+        if (!response.success) throw new Error(response.error);
+        router = response.router;
+    } catch (error) {
+        showToast('Failed to load router data', 'error');
+        return;
+    }
+
+    // Load estates for dropdown
+    let estatesOptions = '<option value="">No estate</option>';
+    try {
+        const estatesResp = await apiCall('/estates');
+        if (estatesResp.success) {
+            estatesOptions += estatesResp.estates.map(e =>
+                `<option value="${e.id}" ${router.estate_id === e.id ? 'selected' : ''}>${escapeHtml(e.name)}</option>`
+            ).join('');
+        }
+    } catch (e) { /* ignore */ }
+
+    createModal('Edit Router', `
+        <form id="edit-router-form">
             <div class="mb-4">
-                <label class="block text-sm font-medium mb-2">Router Name</label>
-                <input type="text" name="name" required class="w-full px-3 py-2 border rounded">
+                <label class="block text-sm font-medium mb-1">Router Name *</label>
+                <input type="text" name="name" value="${escapeHtml(router.name)}" required
+                    class="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
             </div>
             <div class="mb-4">
-                <label class="block text-sm font-medium mb-2">IP Address</label>
-                <input type="text" name="ip_address" required class="w-full px-3 py-2 border rounded">
+                <label class="block text-sm font-medium mb-1">Description</label>
+                <textarea name="description" rows="2"
+                    class="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500">${escapeHtml(router.description || '')}</textarea>
             </div>
             <div class="mb-4">
-                <label class="block text-sm font-medium mb-2">API Port</label>
-                <input type="number" name="api_port" value="8729" required class="w-full px-3 py-2 border rounded">
+                <label class="block text-sm font-medium mb-1">Estate</label>
+                <select name="estate_id" class="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    ${estatesOptions}
+                </select>
+            </div>
+            <hr class="my-4">
+            <p class="text-sm text-gray-500 mb-3">Leave password blank to keep existing credentials</p>
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-1">API Username</label>
+                <input type="text" name="api_username" placeholder="Leave blank to keep current"
+                    class="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
             </div>
             <div class="mb-4">
-                <label class="block text-sm font-medium mb-2">API Username</label>
-                <input type="text" name="api_username" required class="w-full px-3 py-2 border rounded">
+                <label class="block text-sm font-medium mb-1">API Password</label>
+                <input type="password" name="api_password" placeholder="Leave blank to keep current"
+                    class="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
             </div>
             <div class="mb-4">
-                <label class="block text-sm font-medium mb-2">API Password</label>
-                <input type="password" name="api_password" required class="w-full px-3 py-2 border rounded">
-            </div>
-            <div class="mb-4">
-                <label class="block text-sm font-medium mb-2">Description</label>
-                <textarea name="description" class="w-full px-3 py-2 border rounded"></textarea>
+                <label class="flex items-center">
+                    <input type="checkbox" name="active" ${router.active ? 'checked' : ''} class="mr-2">
+                    <span class="text-sm font-medium">Router Active</span>
+                </label>
             </div>
             <div class="flex space-x-2">
                 <button type="submit" class="flex-1 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
-                    Create Router
+                    Save Changes
+                </button>
+                <button type="button" onclick="closeModal()" class="flex-1 bg-gray-300 px-4 py-2 rounded hover:bg-gray-400">
+                    Cancel
+                </button>
+            </div>
+        </form>
+    `);
+
+    document.getElementById('edit-router-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const formData = new FormData(e.target);
+        const data = {
+            name: formData.get('name'),
+            description: formData.get('description') || null,
+            estate_id: formData.get('estate_id') || null,
+            active: formData.get('active') === 'on',
+        };
+        const apiUsername = formData.get('api_username');
+        const apiPassword = formData.get('api_password');
+        if (apiUsername) data.api_username = apiUsername;
+        if (apiPassword) data.api_password = apiPassword;
+
+        try {
+            const response = await apiCall(`/routers/${routerId}`, 'PUT', data);
+            if (response.success) {
+                showToast('Router updated successfully', 'success');
+                closeModal();
+                if (currentRouterId === routerId) {
+                    document.getElementById('router-detail-name').textContent = data.name;
+                    loadRouterSystemInfo();
+                }
+                loadRouters();
+            } else {
+                showToast(response.error || 'Failed to update router', 'error');
+            }
+        } catch (error) {
+            showToast('Failed to update router', 'error');
+        }
+    });
+}
+
+async function showAddRouterModal() {
+    // Load estates for dropdown
+    let estatesOptions = '<option value="">No estate</option>';
+    try {
+        const estatesResp = await apiCall('/estates');
+        if (estatesResp.success) {
+            estatesOptions += estatesResp.estates.map(e =>
+                `<option value="${e.id}">${escapeHtml(e.name)}</option>`
+            ).join('');
+        }
+    } catch (e) { /* ignore */ }
+
+    createModal('Add MikroTik Router', `
+        <form id="add-router-form">
+            <div class="grid grid-cols-2 gap-3 mb-3">
+                <div class="col-span-2">
+                    <label class="block text-sm font-medium mb-1">Router Name *</label>
+                    <input type="text" name="name" required placeholder="e.g. Block A Router"
+                        class="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">IP Address *</label>
+                    <input type="text" name="ip_address" required placeholder="192.168.1.1"
+                        class="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">API Port</label>
+                    <input type="number" name="api_port" value="8729"
+                        class="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <p class="text-xs text-gray-400 mt-0.5">Default: 8729 (API-SSL)</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">API Username *</label>
+                    <input type="text" name="api_username" required placeholder="admin"
+                        class="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">API Password *</label>
+                    <input type="password" name="api_password" required
+                        class="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div class="col-span-2">
+                    <label class="block text-sm font-medium mb-1">Estate</label>
+                    <select name="estate_id" class="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        ${estatesOptions}
+                    </select>
+                </div>
+                <div class="col-span-2">
+                    <label class="block text-sm font-medium mb-1">Description</label>
+                    <textarea name="description" rows="2" placeholder="Optional notes"
+                        class="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                </div>
+            </div>
+            <div class="bg-blue-50 border border-blue-200 rounded p-3 mb-4 text-xs text-blue-700">
+                <strong>Setup tip:</strong> Enable the RouterOS API service on your MikroTik:
+                <code class="block mt-1 bg-blue-100 rounded px-2 py-1 font-mono">/ip service enable api-ssl</code>
+                Make sure the API user has <em>full</em> or <em>write</em> permissions.
+            </div>
+            <div class="flex space-x-2">
+                <button type="submit" id="add-router-submit-btn" class="flex-1 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+                    <i class="fas fa-plus mr-2"></i>Add Router
                 </button>
                 <button type="button" onclick="closeModal()" class="flex-1 bg-gray-300 px-4 py-2 rounded hover:bg-gray-400">
                     Cancel
@@ -384,21 +846,32 @@ function showAddRouterModal() {
 
     document.getElementById('add-router-form').addEventListener('submit', async (e) => {
         e.preventDefault();
+        const btn = document.getElementById('add-router-submit-btn');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Adding...';
+
         const formData = new FormData(e.target);
         const data = Object.fromEntries(formData);
+        if (!data.estate_id) delete data.estate_id;
+        if (!data.description) delete data.description;
 
         try {
             const response = await apiCall('/routers', 'POST', data);
-
             if (response.success) {
-                showToast('Router created successfully', 'success');
+                showToast('Router added successfully!', 'success');
                 closeModal();
                 loadRouters();
+                // Auto-test the new router
+                setTimeout(() => testRouter(response.router.id), 500);
             } else {
-                showToast(response.error || 'Failed to create router', 'error');
+                showToast(response.error || 'Failed to add router', 'error');
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-plus mr-2"></i>Add Router';
             }
         } catch (error) {
-            showToast('Failed to create router', 'error');
+            showToast('Failed to add router', 'error');
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-plus mr-2"></i>Add Router';
         }
     });
 }
@@ -827,8 +1300,82 @@ async function toggleEstate(estateId) {
     }
 }
 
-function editEstate(estateId) {
-    showToast('Edit estate feature coming soon', 'info');
+async function editEstate(estateId) {
+    try {
+        const response = await apiCall(`/estates/${estateId}`);
+        if (!response.success) {
+            showToast('Failed to load estate', 'error');
+            return;
+        }
+
+        const estate = response.estate;
+        createModal('Edit Estate', `
+            <form id="edit-estate-form">
+                <div class="mb-4">
+                    <label class="block text-sm font-medium mb-2">Estate Name *</label>
+                    <input type="text" name="name" value="${escapeHtml(estate.name || '')}" required class="w-full px-3 py-2 border rounded">
+                </div>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium mb-2">Location *</label>
+                    <input type="text" name="location" value="${escapeHtml(estate.location || '')}" required class="w-full px-3 py-2 border rounded">
+                </div>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium mb-2">Description</label>
+                    <textarea name="description" class="w-full px-3 py-2 border rounded" rows="2">${escapeHtml(estate.description || '')}</textarea>
+                </div>
+                <div class="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-2">Contact Person</label>
+                        <input type="text" name="contact_person" value="${escapeHtml(estate.contact_person || '')}" class="w-full px-3 py-2 border rounded">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-2">Contact Phone</label>
+                        <input type="text" name="contact_phone" value="${escapeHtml(estate.contact_phone || '')}" class="w-full px-3 py-2 border rounded">
+                    </div>
+                </div>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium mb-2">Contact Email</label>
+                    <input type="email" name="contact_email" value="${escapeHtml(estate.contact_email || '')}" class="w-full px-3 py-2 border rounded">
+                </div>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium mb-2">Status</label>
+                    <select name="status" class="w-full px-3 py-2 border rounded">
+                        <option value="active" ${estate.status === 'active' ? 'selected' : ''}>Active</option>
+                        <option value="inactive" ${estate.status === 'inactive' ? 'selected' : ''}>Inactive</option>
+                    </select>
+                </div>
+                <div class="flex space-x-2">
+                    <button type="submit" class="flex-1 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+                        Save Changes
+                    </button>
+                    <button type="button" onclick="closeModal()" class="flex-1 bg-gray-300 px-4 py-2 rounded hover:bg-gray-400">
+                        Cancel
+                    </button>
+                </div>
+            </form>
+        `);
+
+        document.getElementById('edit-estate-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData);
+
+            try {
+                const updateResponse = await apiCall(`/estates/${estateId}`, 'PUT', data);
+                if (updateResponse.success) {
+                    showToast('Estate updated successfully', 'success');
+                    closeModal();
+                    loadEstates();
+                } else {
+                    showToast(updateResponse.error || 'Failed to update estate', 'error');
+                }
+            } catch (error) {
+                showToast('Failed to update estate', 'error');
+            }
+        });
+    } catch (error) {
+        showToast('Failed to load estate details', 'error');
+    }
 }
 
 async function loadLogs() {
@@ -1032,15 +1579,154 @@ async function deletePackage(packageId, packageName) {
 }
 
 function showAddEstateModal() {
-    showToast('Estate management coming soon', 'info');
+    createModal('Add Estate', `
+        <form id="add-estate-form">
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-2">Estate Name *</label>
+                <input type="text" name="name" required class="w-full px-3 py-2 border rounded" placeholder="e.g. Greenview Estate">
+            </div>
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-2">Location *</label>
+                <input type="text" name="location" required class="w-full px-3 py-2 border rounded" placeholder="e.g. Nairobi, Kenya">
+            </div>
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-2">Description</label>
+                <textarea name="description" class="w-full px-3 py-2 border rounded" rows="2"></textarea>
+            </div>
+            <div class="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label class="block text-sm font-medium mb-2">Contact Person</label>
+                    <input type="text" name="contact_person" class="w-full px-3 py-2 border rounded">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-2">Contact Phone</label>
+                    <input type="text" name="contact_phone" class="w-full px-3 py-2 border rounded">
+                </div>
+            </div>
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-2">Contact Email</label>
+                <input type="email" name="contact_email" class="w-full px-3 py-2 border rounded">
+            </div>
+            <div class="flex space-x-2">
+                <button type="submit" class="flex-1 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+                    Create Estate
+                </button>
+                <button type="button" onclick="closeModal()" class="flex-1 bg-gray-300 px-4 py-2 rounded hover:bg-gray-400">
+                    Cancel
+                </button>
+            </div>
+        </form>
+    `);
+
+    document.getElementById('add-estate-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const formData = new FormData(e.target);
+        const data = Object.fromEntries(formData);
+
+        try {
+            const response = await apiCall('/estates', 'POST', data);
+            if (response.success) {
+                showToast('Estate created successfully', 'success');
+                closeModal();
+                loadEstates();
+            } else {
+                showToast(response.error || 'Failed to create estate', 'error');
+            }
+        } catch (error) {
+            showToast('Failed to create estate', 'error');
+        }
+    });
 }
 
-function editRouter(routerId) {
-    showToast('Edit functionality coming soon', 'info');
-}
+async function editAdmin(adminId) {
+    try {
+        const [adminResponse, rolesResponse] = await Promise.all([
+            apiCall(`/admins/${adminId}`),
+            apiCall('/roles')
+        ]);
 
-function editAdmin(adminId) {
-    showToast('Edit functionality coming soon', 'info');
+        if (!adminResponse.success) {
+            showToast('Failed to load admin', 'error');
+            return;
+        }
+
+        const admin = adminResponse.admin;
+        const allRoles = rolesResponse.success ? (rolesResponse.roles || []) : [];
+        const adminRoleIds = (admin.roles || []).map(r => r.id);
+
+        const rolesHtml = allRoles.map(role => `
+            <label class="flex items-center space-x-2 mb-1">
+                <input type="checkbox" name="role_ids" value="${role.id}" ${adminRoleIds.includes(role.id) ? 'checked' : ''} class="rounded">
+                <span class="text-sm">${escapeHtml(role.name)}</span>
+            </label>
+        `).join('');
+
+        createModal('Edit Admin', `
+            <form id="edit-admin-form">
+                <div class="mb-4">
+                    <label class="block text-sm font-medium mb-1">Username</label>
+                    <input type="text" value="${escapeHtml(admin.username)}" disabled class="w-full px-3 py-2 border rounded bg-gray-100 text-gray-500">
+                    <p class="text-xs text-gray-500 mt-1">Username cannot be changed</p>
+                </div>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium mb-2">Full Name</label>
+                    <input type="text" name="full_name" value="${escapeHtml(admin.full_name || '')}" class="w-full px-3 py-2 border rounded">
+                </div>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium mb-2">Email *</label>
+                    <input type="email" name="email" value="${escapeHtml(admin.email || '')}" required class="w-full px-3 py-2 border rounded">
+                </div>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium mb-2">Status</label>
+                    <select name="active" class="w-full px-3 py-2 border rounded">
+                        <option value="true" ${admin.active ? 'selected' : ''}>Active</option>
+                        <option value="false" ${!admin.active ? 'selected' : ''}>Inactive</option>
+                    </select>
+                </div>
+                ${allRoles.length > 0 ? `
+                <div class="mb-4">
+                    <label class="block text-sm font-medium mb-2">Roles</label>
+                    <div class="border rounded p-3 max-h-32 overflow-y-auto">
+                        ${rolesHtml}
+                    </div>
+                </div>` : ''}
+                <div class="flex space-x-2">
+                    <button type="submit" class="flex-1 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+                        Save Changes
+                    </button>
+                    <button type="button" onclick="closeModal()" class="flex-1 bg-gray-300 px-4 py-2 rounded hover:bg-gray-400">
+                        Cancel
+                    </button>
+                </div>
+            </form>
+        `);
+
+        document.getElementById('edit-admin-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const data = {
+                email: formData.get('email'),
+                full_name: formData.get('full_name'),
+                active: formData.get('active') === 'true',
+                role_ids: formData.getAll('role_ids')
+            };
+
+            try {
+                const updateResponse = await apiCall(`/admins/${adminId}`, 'PUT', data);
+                if (updateResponse.success) {
+                    showToast('Admin updated successfully', 'success');
+                    closeModal();
+                    loadAdmins();
+                } else {
+                    showToast(updateResponse.error || 'Failed to update admin', 'error');
+                }
+            } catch (error) {
+                showToast('Failed to update admin', 'error');
+            }
+        });
+    } catch (error) {
+        showToast('Failed to load admin details', 'error');
+    }
 }
 
 // =====================================================
@@ -1082,6 +1768,24 @@ function closeModal() {
 }
 
 function formatDate(dateString) {
+    if (!dateString) return '-';
     const date = new Date(dateString);
     return date.toLocaleString();
+}
+
+function formatBytes(bytes) {
+    if (!bytes || bytes === 0) return '0 B';
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(1024));
+    return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${sizes[i]}`;
+}
+
+function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
 }

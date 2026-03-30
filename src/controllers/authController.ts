@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import authService from '../services/authService';
+import emailService from '../services/emailService';
 import { logger } from '../utils/logger';
 
 export class AuthController {
@@ -128,29 +129,41 @@ export class AuthController {
     }
 
     async requestPasswordReset(req: Request, res: Response): Promise<void> {
+        const { email } = req.body;
+
+        if (!email) {
+            res.status(400).json({ error: 'Email is required' });
+            return;
+        }
+
         try {
-            const { email } = req.body;
+            // Inner try: attempt token generation + email. Errors here are swallowed
+            // so the response is identical whether the email exists or not (anti-enumeration).
+            try {
+                const token = await authService.generatePasswordResetToken(email);
+                const emailSent = await emailService.sendPasswordReset(email, token);
 
-            if (!email) {
-                res.status(400).json({ error: 'Email is required' });
-                return;
+                if (!emailSent && process.env.NODE_ENV !== 'production') {
+                    // Dev fallback: include token in response so it can be tested without email
+                    res.status(200).json({
+                        success: true,
+                        message: 'Password reset token generated (email disabled — see server logs).',
+                        resetToken: token
+                    });
+                    return;
+                }
+            } catch (innerError: any) {
+                // Log server-side only — never expose to client (prevents email enumeration)
+                logger.info('Password reset requested (no matching account or send error):', { email });
             }
-
-            const token = await authService.generatePasswordResetToken(email);
-
-            // TODO: In production, send this token via email instead of returning it
-            // For development purposes, we log the token
-            console.log(`Password reset token for ${email}: ${token}`);
 
             res.status(200).json({
                 success: true,
                 message: 'If an account exists with this email, a password reset link has been sent.',
-                // SECURITY: Do not return token in production - send via email instead
-                ...(process.env.NODE_ENV === 'development' && { resetToken: token })
             });
         } catch (error: any) {
             logger.error('Password reset request error:', error);
-            res.status(400).json({ error: error.message || 'Failed to request password reset' });
+            res.status(500).json({ error: 'Failed to request password reset' });
         }
     }
 

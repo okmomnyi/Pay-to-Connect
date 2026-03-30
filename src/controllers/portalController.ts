@@ -119,164 +119,104 @@ class PortalController {
 
     public initiatePayment = async (req: any, res: Response): Promise<void> => {
         try {
-            // Require authentication - get userId from authenticated user
             if (!req.user || !req.user.userId) {
-                res.status(401).json({
-                    success: false,
-                    error: 'Authentication required'
-                });
+                res.status(401).json({ success: false, error: 'Authentication required' });
                 return;
             }
             const userId = req.user.userId;
 
-            // Validate request
             const schema = Joi.object({
                 phone: Joi.string().pattern(/^(\+254|254|0)?[17]\d{8}$/).required(),
                 packageId: Joi.string().uuid().required(),
-                macAddress: Joi.string().pattern(/^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/).required()
+                macAddress: Joi.string().pattern(/^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/).required(),
+                routerId: Joi.string().uuid().required()
             });
 
             const { error, value } = schema.validate(req.body);
             if (error) {
-                res.status(400).json({
+                res.status(400).json({ success: false, error: error.details[0].message });
+                return;
+            }
+
+            const { phone, packageId, macAddress, routerId } = value;
+
+            // Verify package exists
+            const packageResult = await this.db.query(
+                'SELECT id, name, price_kes, duration_minutes FROM packages WHERE id = $1 AND active = true',
+                [packageId]
+            );
+            if (packageResult.rows.length === 0) {
+                res.status(404).json({ success: false, error: 'Package not found or inactive' });
+                return;
+            }
+            const packageData = packageResult.rows[0];
+            const amount = parseFloat(packageData.price_kes);
+
+            // Verify router exists
+            const routerResult = await this.db.query(
+                'SELECT id, ip_address FROM routers WHERE id = $1 AND active = true',
+                [routerId]
+            );
+            if (routerResult.rows.length === 0) {
+                res.status(404).json({ success: false, error: 'Router not found or inactive' });
+                return;
+            }
+
+            // Block duplicate pending payments for this device (within 10 minutes)
+            const existingPayment = await this.db.query(
+                `SELECT id, mpesa_checkout_request_id FROM payments
+                 WHERE mac_address = $1 AND status = 'pending'
+                 AND created_at > NOW() - INTERVAL '10 minutes'
+                 LIMIT 1`,
+                [macAddress]
+            );
+            if (existingPayment.rows.length > 0) {
+                res.status(409).json({
                     success: false,
-                    error: error.details[0].message
+                    error: 'Payment already in progress for this device',
+                    checkoutRequestId: existingPayment.rows[0].mpesa_checkout_request_id
                 });
                 return;
             }
 
-            const { phone, packageId, macAddress }: PaymentRequest = value;
+            // Create the payment record FIRST with full context so the callback can
+            // find everything it needs without relying on Redis or raw_callback.
+            const paymentInsert = await this.db.query(
+                `INSERT INTO payments (user_id, package_id, phone, amount, mac_address, router_id, status)
+                 VALUES ($1, $2, $3, $4, $5, $6, 'pending')
+                 RETURNING id`,
+                [userId, packageId, phone, amount, macAddress, routerId]
+            );
+            const paymentId = paymentInsert.rows[0].id;
 
-            // Validate MAC address format
-            const macRegex = /^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/;
-            if (!macRegex.test(macAddress)) {
-                res.status(400).json({
-                    success: false,
-                    error: 'Invalid MAC address format'
-                });
-                return;
-            }
-
-            // Check if package exists and is active (with fallback to test packages)
-            let packageData: any;
-            let amount: number;
-
-            try {
-                const packageResult = await this.db.query(
-                    'SELECT id, name, price_kes, duration_minutes FROM packages WHERE id = $1 AND active = true',
-                    [packageId]
-                );
-
-                if (packageResult.rows.length === 0) {
-                    res.status(404).json({
-                        success: false,
-                        error: 'Package not found or inactive'
-                    });
-                    return;
-                }
-
-                packageData = packageResult.rows[0];
-                amount = parseFloat(packageData.price_kes);
-
-                // Check for existing pending payment for this device
-                const existingPayment = await this.db.query(`
-                    SELECT p.id, p.mpesa_checkout_request_id 
-                    FROM payments p
-                    JOIN sessions s ON p.id = s.payment_id
-                    JOIN devices d ON s.device_id = d.id
-                    WHERE d.mac_address = $1 AND p.status = 'pending'
-                    AND p.created_at > NOW() - INTERVAL '10 minutes'
-                    LIMIT 1
-                `, [macAddress]);
-
-                if (existingPayment.rows.length > 0) {
-                    res.status(409).json({
-                        success: false,
-                        error: 'Payment already in progress for this device',
-                        checkoutRequestId: existingPayment.rows[0].mpesa_checkout_request_id
-                    });
-                    return;
-                }
-            } catch (dbError) {
-                // Database not available, use test packages
-                logger.warn('Database not available, using test packages:', dbError);
-
-                const testPackages = [
-                    { id: '550e8400-e29b-41d4-a716-446655440001', name: '1 Hour Basic', price_kes: 10 },
-                    { id: '550e8400-e29b-41d4-a716-446655440002', name: '3 Hours Standard', price_kes: 25 },
-                    { id: '550e8400-e29b-41d4-a716-446655440003', name: '24 Hours Premium', price_kes: 50 },
-                    { id: '550e8400-e29b-41d4-a716-446655440004', name: '7 Days Unlimited', price_kes: 200 }
-                ];
-
-                packageData = testPackages.find(p => p.id === packageId);
-                if (!packageData) {
-                    res.status(404).json({
-                        success: false,
-                        error: 'Package not found'
-                    });
-                    return;
-                }
-                amount = packageData.price_kes;
-            }
-
-            // Generate account reference
             const accountReference = `WIFI-${uuidv4().substring(0, 8).toUpperCase()}`;
 
-            // Initiate M-Pesa STK Push
-            const paymentResult = await this.mpesaService.initiateSTKPush(
+            // Initiate STK Push — mpesaService updates the payment with checkoutRequestId
+            const stkResult = await this.mpesaService.initiateSTKPush(
+                paymentId,
                 phone,
                 amount,
                 accountReference
             );
 
-            if (paymentResult.success && paymentResult.checkoutRequestId) {
-                // Try to store session reference for later activation (if Redis is available)
-                try {
-                    if (this.db.isRedisEnabled()) {
-                        const redisClient = this.db.getRedisClient();
-                        await redisClient!.setEx(
-                            `payment:${paymentResult.checkoutRequestId}`,
-                            600, // 10 minutes
-                            JSON.stringify({
-                                packageId,
-                                macAddress,
-                                phone,
-                                amount,
-                                accountReference,
-                                userId
-                            })
-                        );
-                    } else {
-                        // Store in database as fallback
-                        await this.db.query(
-                            `UPDATE payments SET raw_callback = $1 WHERE mpesa_checkout_request_id = $2`,
-                            [JSON.stringify({ packageId, macAddress, phone, amount, accountReference, userId }), paymentResult.checkoutRequestId]
-                        );
-                    }
-                } catch (storageError) {
-                    logger.warn('Failed to store payment session data:', storageError);
-                    // Continue without storing payment session data (we can still process the payment)
-                }
-
+            if (stkResult.success && stkResult.checkoutRequestId) {
                 res.json({
                     success: true,
-                    message: 'Payment initiated successfully',
-                    checkoutRequestId: paymentResult.checkoutRequestId,
+                    message: 'Payment initiated successfully. Complete the prompt on your phone.',
+                    checkoutRequestId: stkResult.checkoutRequestId,
+                    paymentId,
                     amount,
                     packageName: packageData.name
                 });
             } else {
                 res.status(400).json({
                     success: false,
-                    error: paymentResult.error || 'Failed to initiate payment'
+                    error: stkResult.error || 'Failed to initiate payment'
                 });
             }
         } catch (error) {
             logger.error('Failed to initiate payment:', error);
-            res.status(500).json({
-                success: false,
-                error: 'Internal server error'
-            });
+            res.status(500).json({ success: false, error: 'Internal server error' });
         }
     };
 
@@ -438,86 +378,106 @@ class PortalController {
     };
 
     public handleMpesaCallback = async (req: Request, res: Response): Promise<void> => {
+        // Always respond 200 immediately — M-Pesa retries if it doesn't get a fast response
+        res.json({ ResultCode: 0, ResultDesc: 'Received' });
+
         try {
-            logger.info('Received M-Pesa callback:', JSON.stringify(req.body, null, 2));
+            const callback = req.body.Body.stkCallback;
+            const checkoutRequestId = callback.CheckoutRequestID;
+            const resultCode = callback.ResultCode;
 
-            const result = await this.mpesaService.handleCallback(req.body);
+            logger.info(`M-Pesa callback received: CheckoutRequestID=${checkoutRequestId}, ResultCode=${resultCode}`);
 
-            if (result.success && result.paymentId) {
-                // Get payment and session details from Redis
-                const callback = req.body.Body.stkCallback;
-                const checkoutRequestId = callback.CheckoutRequestID;
+            // Read the payment record — it already has user_id, package_id, mac_address, router_id
+            // saved at initiation time. No Redis or raw_callback needed for session context.
+            const paymentRow = await this.db.query(
+                `SELECT id, user_id, package_id, mac_address, router_id, status
+                 FROM payments WHERE mpesa_checkout_request_id = $1`,
+                [checkoutRequestId]
+            );
 
-                let sessionData = null;
-
-                if (this.db.isRedisEnabled()) {
-                    const redisClient = this.db.getRedisClient();
-                    const sessionDataStr = await redisClient!.get(`payment:${checkoutRequestId}`);
-                    if (sessionDataStr) {
-                        sessionData = JSON.parse(sessionDataStr);
-                    }
-                } else {
-                    // Fallback to database
-                    const paymentResult = await this.db.query(
-                        `SELECT raw_callback FROM payments WHERE mpesa_checkout_request_id = $1`,
-                        [checkoutRequestId]
-                    );
-                    if (paymentResult.rows.length > 0 && paymentResult.rows[0].raw_callback) {
-                        sessionData = paymentResult.rows[0].raw_callback;
-                    }
-                }
-
-                if (sessionData && callback.ResultCode === 0) {
-
-                    // Get router IP from request or use default
-                    const routerIp = req.ip || '127.0.0.1';
-
-                    // Create session with user ID
-                    const sessionResult = await this.radiusService.createSession(
-                        sessionData.macAddress,
-                        sessionData.packageId,
-                        result.paymentId,
-                        routerIp,
-                        sessionData.userId
-                    );
-
-                    if (sessionResult.success) {
-                        logger.info(`Session created successfully: ${sessionResult.sessionId}`);
-
-                        // Store session ID in Redis for quick access (if available)
-                        if (this.db.isRedisEnabled()) {
-                            const redisClient = this.db.getRedisClient();
-                            await redisClient!.setEx(
-                                `session:${sessionData.macAddress}`,
-                                3600, // 1 hour
-                                sessionResult.sessionId!
-                            );
-                        }
-                    } else {
-                        logger.error(`Failed to create session: ${sessionResult.error}`);
-                    }
-
-                    // Clean up payment data
-                    if (this.db.isRedisEnabled()) {
-                        const redisClient = this.db.getRedisClient();
-                        await redisClient!.del(`payment:${checkoutRequestId}`);
-                    }
-                }
+            if (paymentRow.rows.length === 0) {
+                logger.error(`No payment found for CheckoutRequestID: ${checkoutRequestId}`);
+                return;
             }
 
-            // Always respond with success to M-Pesa
-            res.json({
-                ResultCode: 0,
-                ResultDesc: 'Callback processed successfully'
-            });
-        } catch (error) {
-            logger.error('Failed to process M-Pesa callback:', error);
+            const payment = paymentRow.rows[0];
 
-            // Still respond with success to avoid retries
-            res.json({
-                ResultCode: 0,
-                ResultDesc: 'Callback received'
-            });
+            if (payment.status !== 'pending') {
+                logger.info(`Payment ${payment.id} already processed (status=${payment.status}), skipping`);
+                return;
+            }
+
+            if (resultCode === 0) {
+                // Extract M-Pesa receipt number from callback metadata
+                const items: any[] = callback.CallbackMetadata?.Item ?? [];
+                const mpesaReceipt = items.find((i: any) => i.Name === 'MpesaReceiptNumber')?.Value ?? null;
+                const paidAmount   = items.find((i: any) => i.Name === 'Amount')?.Value ?? null;
+                const payerPhone   = items.find((i: any) => i.Name === 'PhoneNumber')?.Value?.toString() ?? null;
+
+                // Mark payment as successful
+                await this.db.query(
+                    `UPDATE payments
+                     SET status = 'success',
+                         mpesa_receipt_number = $1,
+                         amount = COALESCE($2, amount),
+                         phone  = COALESCE($3, phone),
+                         raw_callback = $4,
+                         updated_at = NOW()
+                     WHERE id = $5`,
+                    [mpesaReceipt, paidAmount, payerPhone, JSON.stringify(req.body), payment.id]
+                );
+
+                logger.info(`Payment ${payment.id} marked successful. Receipt: ${mpesaReceipt}`);
+
+                // Look up the router's IP address for the RADIUS session
+                let routerIp: string | null = null;
+                if (payment.router_id) {
+                    const routerRow = await this.db.query(
+                        'SELECT ip_address FROM routers WHERE id = $1',
+                        [payment.router_id]
+                    );
+                    routerIp = routerRow.rows[0]?.ip_address ?? null;
+                }
+
+                if (!payment.mac_address || !payment.package_id) {
+                    logger.error(`Payment ${payment.id} is missing mac_address or package_id — cannot create session`);
+                    return;
+                }
+
+                // Create the WiFi session now that payment is confirmed
+                const sessionResult = await this.radiusService.createSession(
+                    payment.mac_address,
+                    payment.package_id,
+                    payment.id,
+                    routerIp || '0.0.0.0',
+                    payment.user_id
+                );
+
+                if (sessionResult.success) {
+                    logger.info(`Session ${sessionResult.sessionId} created for device ${payment.mac_address} after payment ${payment.id}`);
+
+                    // Cache the session ID in Redis for fast RADIUS lookups (optional)
+                    if (this.db.isRedisEnabled()) {
+                        const redis = this.db.getRedisClient();
+                        await redis!.setEx(`session:${payment.mac_address}`, 86400, sessionResult.sessionId!);
+                    }
+                } else {
+                    logger.error(`Failed to create session for payment ${payment.id}: ${sessionResult.error}`);
+                }
+
+            } else {
+                // Payment was cancelled or failed — mark it and do not create a session
+                await this.db.query(
+                    `UPDATE payments
+                     SET status = 'failed', raw_callback = $1, updated_at = NOW()
+                     WHERE id = $2`,
+                    [JSON.stringify(req.body), payment.id]
+                );
+                logger.info(`Payment ${payment.id} failed. ResultCode=${resultCode}, Desc="${callback.ResultDesc}"`);
+            }
+        } catch (error) {
+            logger.error('Error processing M-Pesa callback:', error);
         }
     };
 }
