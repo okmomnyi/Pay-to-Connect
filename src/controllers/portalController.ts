@@ -168,6 +168,10 @@ class PortalController {
                     'SELECT id FROM routers WHERE active = true LIMIT 1'
                 );
                 routerId = defaultRouter.rows.length > 0 ? defaultRouter.rows[0].id : null;
+                if (!routerId) {
+                    res.status(503).json({ success: false, error: 'No active routers available. Please contact support.' });
+                    return;
+                }
             }
 
             // Block duplicate pending payments for this device (within 10 minutes)

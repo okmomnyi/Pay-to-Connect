@@ -14,6 +14,8 @@ interface RouterCredentials {
     api_password_encrypted: string;
     encryption_iv: string;
     encryption_auth_tag: string;
+    // Joined from routers table
+    ip_address: string;
     api_port: number;
     connection_timeout: number;
 }
@@ -63,21 +65,10 @@ class MikroTikService {
     private async connectToRouter(routerId: string): Promise<any | null> {
         try {
             const credentials = await this.getRouterCredentials(routerId);
-            
+
             if (!credentials) {
                 throw new Error('Router credentials not found');
             }
-
-            const routerInfo = await this.db.query(
-                'SELECT ip_address, api_port FROM routers WHERE id = $1',
-                [routerId]
-            );
-
-            if (routerInfo.rows.length === 0) {
-                throw new Error('Router not found');
-            }
-
-            const router = routerInfo.rows[0];
 
             // Decrypt password using correct IV and authTag
             const password = encryptionService.decrypt(
@@ -86,13 +77,17 @@ class MikroTikService {
                 credentials.encryption_auth_tag
             );
 
+            const port = credentials.api_port || 8728;
+            // Port 8729 is the MikroTik TLS API port; 8728 is plaintext
+            const useTls = port === 8729;
+
             const api = new RouterOSAPI({
-                host: router.ip_address,
+                host: credentials.ip_address,
                 user: credentials.api_username,
                 password: password,
-                port: router.api_port || 8729,
+                port,
                 timeout: credentials.connection_timeout || 10000,
-                tls: true // Always use TLS
+                tls: useTls
             });
 
             await api.connect();
