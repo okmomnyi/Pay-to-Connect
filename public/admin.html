@@ -76,11 +76,13 @@
     .router-tab-btn.active { color: #C2777A; border-bottom-color: #C2777A; }
     /* Glass input */
     .glass-input {
-      background: rgba(255,255,255,0.03); border: 1px solid rgba(72,71,81,0.3);
+      background: rgba(255,255,255,0.05); border: 1px solid rgba(72,71,81,0.45);
       color: #e7e4f0; border-radius: 0.75rem; padding: 0.65rem 1rem; width: 100%; transition: all 0.2s;
+      font-size: 0.875rem;
     }
-    .glass-input:focus { outline: none; border-color: #C2777A; box-shadow: 0 0 0 2px rgba(194,119,122,0.2); }
+    .glass-input:focus { outline: none; border-color: #C2777A; box-shadow: 0 0 0 2px rgba(194,119,122,0.2); background: rgba(255,255,255,0.07); }
     .glass-input::placeholder { color: #76747f; }
+    select.glass-input option { background: #1f1f2a; color: #e7e4f0; }
   </style>
 </head>
 <body class="min-h-screen bg-surface-container-lowest text-on-surface relative antialiased">

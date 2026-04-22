@@ -789,55 +789,55 @@ async function showAddRouterModal() {
 
     createModal('Add MikroTik Router', `
         <form id="add-router-form">
-            <div class="grid grid-cols-2 gap-3 mb-3">
+            <div class="grid grid-cols-2 gap-3 mb-4">
                 <div class="col-span-2">
-                    <label class="block text-sm font-medium mb-1">Router Name *</label>
+                    <label class="block text-xs font-semibold uppercase tracking-wider mb-1.5" style="color:#acaab5;">Router Name *</label>
                     <input type="text" name="name" required placeholder="e.g. Block A Router"
-                        class="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        class="glass-input">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium mb-1">IP Address *</label>
-                    <input type="text" name="ip_address" required placeholder="192.168.1.1"
-                        class="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <label class="block text-xs font-semibold uppercase tracking-wider mb-1.5" style="color:#acaab5;">IP Address *</label>
+                    <input type="text" name="ip_address" required placeholder="Router IP address"
+                        class="glass-input">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium mb-1">API Port</label>
-                    <input type="number" name="api_port" value="8729"
-                        class="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <p class="text-xs text-gray-400 mt-0.5">Default: 8729 (API-SSL)</p>
+                    <label class="block text-xs font-semibold uppercase tracking-wider mb-1.5" style="color:#acaab5;">API Port</label>
+                    <input type="number" name="api_port" placeholder="8729"
+                        class="glass-input">
+                    <p class="text-xs mt-1" style="color:#76747f;">Default: 8729 (API-SSL)</p>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium mb-1">API Username *</label>
+                    <label class="block text-xs font-semibold uppercase tracking-wider mb-1.5" style="color:#acaab5;">API Username *</label>
                     <input type="text" name="api_username" required placeholder="admin"
-                        class="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        class="glass-input">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium mb-1">API Password *</label>
-                    <input type="password" name="api_password" required
-                        class="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <label class="block text-xs font-semibold uppercase tracking-wider mb-1.5" style="color:#acaab5;">API Password *</label>
+                    <input type="password" name="api_password" required placeholder="••••••••"
+                        class="glass-input">
                 </div>
                 <div class="col-span-2">
-                    <label class="block text-sm font-medium mb-1">Estate</label>
-                    <select name="estate_id" class="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <label class="block text-xs font-semibold uppercase tracking-wider mb-1.5" style="color:#acaab5;">Estate</label>
+                    <select name="estate_id" class="glass-input" style="cursor:pointer;">
                         ${estatesOptions}
                     </select>
                 </div>
                 <div class="col-span-2">
-                    <label class="block text-sm font-medium mb-1">Description</label>
+                    <label class="block text-xs font-semibold uppercase tracking-wider mb-1.5" style="color:#acaab5;">Description</label>
                     <textarea name="description" rows="2" placeholder="Optional notes"
-                        class="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                        class="glass-input" style="resize:none;"></textarea>
                 </div>
             </div>
-            <div class="bg-blue-50 border border-blue-200 rounded p-3 mb-4 text-xs text-blue-700">
-                <strong>Setup tip:</strong> Enable the RouterOS API service on your MikroTik:
-                <code class="block mt-1 bg-blue-100 rounded px-2 py-1 font-mono">/ip service enable api-ssl</code>
+            <div class="rounded-xl p-3 mb-5 text-xs" style="background:rgba(194,119,122,0.08);border:1px solid rgba(194,119,122,0.2);color:#acaab5;">
+                <strong style="color:#C2777A;">Setup tip:</strong> Enable the RouterOS API service on your MikroTik:
+                <code class="block mt-1.5 rounded-lg px-2 py-1" style="background:rgba(0,0,0,0.3);color:#E8A598;font-family:'JetBrains Mono',monospace;">/ip service enable api-ssl</code>
                 Make sure the API user has <em>full</em> or <em>write</em> permissions.
             </div>
-            <div class="flex space-x-2">
-                <button type="submit" id="add-router-submit-btn" class="flex-1 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+            <div class="flex gap-2">
+                <button type="submit" id="add-router-submit-btn" class="flex-1 btn-gradient font-semibold px-4 py-2.5 rounded-xl text-sm transition-opacity hover:opacity-90">
                     <i class="fas fa-plus mr-2"></i>Add Router
                 </button>
-                <button type="button" onclick="closeModal()" class="flex-1 bg-gray-300 px-4 py-2 rounded hover:bg-gray-400">
+                <button type="button" onclick="closeModal()" class="flex-1 font-semibold px-4 py-2.5 rounded-xl text-sm transition-colors" style="background:rgba(255,255,255,0.05);border:1px solid rgba(72,71,81,0.35);color:#acaab5;" onmouseover="this.style.background='rgba(255,255,255,0.09)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'">
                     Cancel
                 </button>
             </div>
@@ -1084,48 +1084,90 @@ async function loadPackages() {
                 return;
             }
 
-            grid.innerHTML = packages.map(pkg => `
-                <div class="bg-white rounded-lg shadow-md p-6 border border-gray-200">
-                    <div class="flex justify-between items-start mb-4">
-                        <h3 class="text-lg font-semibold text-gray-900">${pkg.name}</h3>
-                        <span class="px-2 py-1 text-xs font-semibold rounded-full ${pkg.active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}">
-                            ${pkg.active ? 'Active' : 'Inactive'}
+            grid.innerHTML = packages.map(pkg => {
+                const durationLabel = pkg.duration_minutes >= 1440
+                    ? `${Math.round(pkg.duration_minutes / 1440)} day${pkg.duration_minutes >= 2880 ? 's' : ''}`
+                    : pkg.duration_minutes >= 60
+                        ? `${Math.round(pkg.duration_minutes / 60)} hr${pkg.duration_minutes >= 120 ? 's' : ''}`
+                        : `${pkg.duration_minutes} min`;
+                return `
+                <div style="background:#191923;border:1px solid rgba(72,71,81,0.35);transition:border-color 0.2s,transform 0.2s;"
+                     class="rounded-2xl p-5 flex flex-col gap-0 hover:border-primary"
+                     onmouseover="this.style.borderColor='rgba(194,119,122,0.5)';this.style.transform='translateY(-2px)'"
+                     onmouseout="this.style.borderColor='rgba(72,71,81,0.35)';this.style.transform='translateY(0)'">
+
+                    <!-- Header -->
+                    <div class="flex items-start justify-between mb-3">
+                        <div>
+                            <h3 style="font-family:'Syne',sans-serif;color:#e7e4f0;" class="text-base font-bold leading-tight">${escapeHtml(pkg.name)}</h3>
+                            ${pkg.description ? `<p class="text-xs mt-0.5" style="color:#76747f;">${escapeHtml(pkg.description)}</p>` : ''}
+                        </div>
+                        <span class="ml-2 shrink-0 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold"
+                              style="${pkg.active
+                                  ? 'background:rgba(34,197,94,0.12);color:#4ade80;border:1px solid rgba(34,197,94,0.25);'
+                                  : 'background:rgba(239,68,68,0.12);color:#f87171;border:1px solid rgba(239,68,68,0.25);'}">
+                            <span style="width:6px;height:6px;border-radius:50%;background:${pkg.active ? '#4ade80' : '#f87171'};display:inline-block;"></span>
+                            ${pkg.active ? 'Active' : 'Disabled'}
                         </span>
                     </div>
-                    <p class="text-gray-600 text-sm mb-4">${pkg.description || 'No description'}</p>
-                    <div class="space-y-2 mb-4">
-                        <div class="flex justify-between text-sm">
-                            <span class="text-gray-500">Price:</span>
-                            <span class="font-medium">KES ${pkg.price_kes || pkg.price || 0}</span>
+
+                    <!-- Divider -->
+                    <div style="height:1px;background:rgba(72,71,81,0.25);margin-bottom:0.875rem;"></div>
+
+                    <!-- Stats -->
+                    <div class="flex flex-col gap-2 mb-4 flex-1">
+                        <div class="flex items-center justify-between text-sm">
+                            <span class="flex items-center gap-1.5" style="color:#76747f;">
+                                <span class="material-symbols-outlined" style="font-size:15px;">payments</span>Price
+                            </span>
+                            <span style="color:#e7e4f0;font-weight:600;">KES ${pkg.price_kes || pkg.price || 0}</span>
                         </div>
-                        <div class="flex justify-between text-sm">
-                            <span class="text-gray-500">Duration:</span>
-                            <span class="font-medium">${pkg.duration_minutes || 0} min</span>
+                        <div class="flex items-center justify-between text-sm">
+                            <span class="flex items-center gap-1.5" style="color:#76747f;">
+                                <span class="material-symbols-outlined" style="font-size:15px;">schedule</span>Duration
+                            </span>
+                            <span style="color:#e7e4f0;font-weight:600;">${durationLabel}</span>
                         </div>
                         ${pkg.data_limit_mb ? `
-                        <div class="flex justify-between text-sm">
-                            <span class="text-gray-500">Data Limit:</span>
-                            <span class="font-medium">${pkg.data_limit_mb} MB</span>
-                        </div>
-                        ` : ''}
-                        <div class="flex justify-between text-sm">
-                            <span class="text-gray-500">Purchased:</span>
-                            <span class="font-medium">${pkg.purchase_count || 0} times</span>
+                        <div class="flex items-center justify-between text-sm">
+                            <span class="flex items-center gap-1.5" style="color:#76747f;">
+                                <span class="material-symbols-outlined" style="font-size:15px;">data_usage</span>Data
+                            </span>
+                            <span style="color:#e7e4f0;font-weight:600;">${pkg.data_limit_mb} MB</span>
+                        </div>` : ''}
+                        <div class="flex items-center justify-between text-sm">
+                            <span class="flex items-center gap-1.5" style="color:#76747f;">
+                                <span class="material-symbols-outlined" style="font-size:15px;">shopping_cart</span>Purchased
+                            </span>
+                            <span style="color:#e7e4f0;font-weight:600;">${pkg.purchase_count || 0}<span style="color:#76747f;font-weight:400;"> times</span></span>
                         </div>
                     </div>
-                    <div class="flex space-x-2">
-                        <button onclick="editPackage('${pkg.id}')" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-2 px-3 rounded transition duration-200">
-                            <i class="fas fa-edit mr-1"></i>Edit
+
+                    <!-- Action buttons -->
+                    <div class="flex gap-2 pt-1">
+                        <button onclick="editPackage('${pkg.id}')"
+                            style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:7px 0;border-radius:10px;font-size:0.75rem;font-weight:600;background:rgba(255,255,255,0.04);border:1px solid rgba(72,71,81,0.4);color:#acaab5;transition:all 0.15s;cursor:pointer;"
+                            onmouseover="this.style.background='rgba(194,119,122,0.12)';this.style.borderColor='rgba(194,119,122,0.4)';this.style.color='#C2777A'"
+                            onmouseout="this.style.background='rgba(255,255,255,0.04)';this.style.borderColor='rgba(72,71,81,0.4)';this.style.color='#acaab5'">
+                            <span class="material-symbols-outlined" style="font-size:14px;">edit</span>Edit
                         </button>
-                        <button onclick="togglePackage('${pkg.id}')" class="${pkg.active ? 'bg-yellow-600 hover:bg-yellow-700' : 'bg-green-600 hover:bg-green-700'} text-white text-sm font-medium py-2 px-3 rounded transition duration-200">
-                            <i class="fas fa-${pkg.active ? 'pause' : 'play'} mr-1"></i>${pkg.active ? 'Disable' : 'Enable'}
+                        <button onclick="togglePackage('${pkg.id}')"
+                            style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:7px 0;border-radius:10px;font-size:0.75rem;font-weight:600;transition:all 0.15s;cursor:pointer;${pkg.active
+                                ? 'background:rgba(255,255,255,0.04);border:1px solid rgba(72,71,81,0.4);color:#acaab5;'
+                                : 'background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.3);color:#4ade80;'}"
+                            onmouseover="this.style.background='${pkg.active ? 'rgba(239,68,68,0.1)' : 'rgba(34,197,94,0.15)'}';this.style.borderColor='${pkg.active ? 'rgba(239,68,68,0.4)' : 'rgba(34,197,94,0.5)'}';this.style.color='${pkg.active ? '#f87171' : '#4ade80'}'"
+                            onmouseout="this.style.background='${pkg.active ? 'rgba(255,255,255,0.04)' : 'rgba(34,197,94,0.08)'}';this.style.borderColor='${pkg.active ? 'rgba(72,71,81,0.4)' : 'rgba(34,197,94,0.3)'}';this.style.color='${pkg.active ? '#acaab5' : '#4ade80'}'">
+                            <span class="material-symbols-outlined" style="font-size:14px;">${pkg.active ? 'pause_circle' : 'play_circle'}</span>${pkg.active ? 'Disable' : 'Enable'}
                         </button>
-                        <button onclick="deletePackage('${pkg.id}', '${pkg.name}')" class="bg-red-600 hover:bg-red-700 text-white text-sm font-medium py-2 px-3 rounded transition duration-200">
-                            <i class="fas fa-trash mr-1"></i>Delete
+                        <button onclick="deletePackage('${pkg.id}', '${pkg.name}')"
+                            style="width:36px;height:36px;display:flex;align-items:center;justify-content:center;border-radius:10px;background:rgba(255,255,255,0.04);border:1px solid rgba(72,71,81,0.4);color:#76747f;transition:all 0.15s;cursor:pointer;flex-shrink:0;"
+                            onmouseover="this.style.background='rgba(239,68,68,0.12)';this.style.borderColor='rgba(239,68,68,0.4)';this.style.color='#f87171'"
+                            onmouseout="this.style.background='rgba(255,255,255,0.04)';this.style.borderColor='rgba(72,71,81,0.4)';this.style.color='#76747f'">
+                            <span class="material-symbols-outlined" style="font-size:16px;">delete</span>
                         </button>
                     </div>
-                </div>
-            `).join('');
+                </div>`;
+            }).join('');
         } else {
             throw new Error(response.error);
         }
@@ -1751,10 +1793,10 @@ function showToast(message, type = 'info') {
 
 function createModal(title, content) {
     const modal = document.createElement('div');
-    modal.className = 'modal active fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+    modal.className = 'modal active fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50';
     modal.innerHTML = `
-        <div class="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-screen overflow-y-auto">
-            <h2 class="text-2xl font-bold mb-4">${title}</h2>
+        <div style="background:#191923;border:1px solid rgba(72,71,81,0.35);color:#e7e4f0;" class="rounded-2xl p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto shadow-2xl">
+            <h2 style="font-family:'Syne',sans-serif;color:#e7e4f0;" class="text-xl font-bold mb-5">${title}</h2>
             ${content}
         </div>
     `;
