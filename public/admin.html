@@ -1,562 +1,510 @@
 <!DOCTYPE html>
-<html lang="en">
+<html class="dark" lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Panel - Captive Portal</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="/admin.css">
-    <style>
-        .sidebar-link.active {
-            background-color: rgba(59, 130, 246, 0.1);
-            border-left: 4px solid #3b82f6;
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Panel — SmartWiFi</title>
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;500;700&family=JetBrains+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+  <script>
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "primary": "#C2777A", "secondary": "#E8A598",
+            "on-primary": "#4a1c1f", "on-surface": "#e7e4f0",
+            "on-surface-variant": "#acaab5",
+            "surface-container-lowest": "#000000",
+            "surface-container-low": "#13121c",
+            "surface-container": "#191923",
+            "surface-container-high": "#1f1f2a",
+            "surface-container-highest": "#252531",
+            "surface-bright": "#2b2b38",
+            "outline-variant": "#484751", "outline": "#76747f",
+            "error": "#ff716c"
+          },
+          fontFamily: {
+            "headline": ["Syne", "sans-serif"],
+            "body": ["DM Sans", "sans-serif"],
+            "mono": ["JetBrains Mono", "monospace"]
+          },
+          borderRadius: { "xl": "0.75rem", "2xl": "1.5rem", "full": "9999px" }
         }
-        .modal {
-            display: none;
-        }
-        .modal.active {
-            display: flex;
-        }
-        .toast {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            z-index: 9999;
-            min-width: 300px;
-            animation: slideIn 0.3s ease-out;
-        }
-        @keyframes slideIn {
-            from {
-                transform: translateX(400px);
-                opacity: 0;
-            }
-            to {
-                transform: translateX(0);
-                opacity: 1;
-            }
-        }
-        .spinner {
-            border: 3px solid #f3f3f3;
-            border-top: 3px solid #3b82f6;
-            border-radius: 50%;
-            width: 20px;
-            height: 20px;
-            animation: spin 1s linear infinite;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-    </style>
+      }
+    }
+  </script>
+  <style>
+    body { font-family: 'DM Sans', sans-serif; background-color: #000000; color: #e7e4f0; }
+    h1, h2, h3, h4 { font-family: 'Syne', sans-serif; }
+    .liquid-glass {
+      background: rgba(255,255,255,0.03);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(72,71,81,0.25);
+    }
+    .btn-gradient { background: linear-gradient(135deg, #C2777A, #E8A598); color: #4a1c1f; }
+    .text-gradient {
+      background: linear-gradient(135deg, #C2777A, #E8A598);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .hidden { display: none !important; }
+    .pulse-blob { position: fixed; border-radius: 50%; filter: blur(80px); pointer-events: none; z-index: 0; }
+    /* Admin-specific */
+    .sidebar-link { display: flex; align-items: center; gap: 0.75rem; padding: 0.65rem 1.25rem; font-size: 0.8125rem; color: #acaab5; transition: all 0.15s; border-left: 3px solid transparent; }
+    .sidebar-link:hover { background: rgba(255,255,255,0.05); color: #e7e4f0; }
+    .sidebar-link.active { background: rgba(194,119,122,0.12); border-left-color: #C2777A; color: #C2777A; }
+    .section { display: block; }
+    .table-wrap { overflow-x: auto; }
+    .data-table { width: 100%; border-collapse: collapse; }
+    .data-table th { padding: 0.6rem 1rem; text-align: left; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: #76747f; border-bottom: 1px solid rgba(72,71,81,0.25); }
+    .data-table td { padding: 0.75rem 1rem; font-size: 0.8125rem; border-bottom: 1px solid rgba(72,71,81,0.12); }
+    .data-table tbody tr:hover { background: rgba(255,255,255,0.02); }
+    /* Modal */
+    .modal { display: none; }
+    .modal.active { display: flex; }
+    /* Spinner */
+    .spinner { border: 2px solid rgba(255,255,255,0.2); border-top-color: white; border-radius: 50%; width: 18px; height: 18px; animation: spin .7s linear infinite; display: inline-block; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    /* Toast */
+    .toast { position: fixed; top: 1.25rem; right: 1.25rem; z-index: 9999; min-width: 280px; animation: slideIn 0.25s ease-out; }
+    @keyframes slideIn { from { transform: translateX(120%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    /* Router tabs */
+    .router-tab-btn { padding: 0.65rem 1rem; font-size: 0.8125rem; font-weight: 500; color: #76747f; border-bottom: 2px solid transparent; transition: all 0.15s; }
+    .router-tab-btn:hover { color: #e7e4f0; }
+    .router-tab-btn.active { color: #C2777A; border-bottom-color: #C2777A; }
+    /* Glass input */
+    .glass-input {
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(72,71,81,0.3);
+      color: #e7e4f0; border-radius: 0.75rem; padding: 0.65rem 1rem; width: 100%; transition: all 0.2s;
+    }
+    .glass-input:focus { outline: none; border-color: #C2777A; box-shadow: 0 0 0 2px rgba(194,119,122,0.2); }
+    .glass-input::placeholder { color: #76747f; }
+  </style>
 </head>
-<body class="bg-gray-100">
-    <!-- Toast Container -->
-    <div id="toast-container"></div>
+<body class="min-h-screen bg-surface-container-lowest text-on-surface relative antialiased">
 
-    <!-- Login Page -->
-    <div id="login-page" class="min-h-screen flex items-center justify-center">
-        <div class="bg-white p-8 rounded-lg shadow-lg w-full max-w-md">
-            <div class="text-center mb-8">
-                <h1 class="text-3xl font-bold text-gray-800">Admin Panel</h1>
-                <p class="text-gray-600 mt-2">Sign in to manage your captive portal</p>
-            </div>
-            <form id="login-form">
-                <div class="mb-4">
-                    <label class="block text-gray-700 text-sm font-bold mb-2">Username or Email</label>
-                    <input type="text" id="login-username" required
-                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500">
-                </div>
-                <div class="mb-6">
-                    <label class="block text-gray-700 text-sm font-bold mb-2">Password</label>
-                    <input type="password" id="login-password" required
-                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500">
-                </div>
-                <button type="submit" id="login-btn"
-                    class="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition duration-200 flex items-center justify-center">
-                    <span id="login-btn-text">Sign In</span>
-                    <div id="login-spinner" class="spinner ml-2 hidden"></div>
-                </button>
-            </form>
-        </div>
+<div class="fixed inset-0 z-0 pointer-events-none overflow-hidden">
+  <div class="pulse-blob w-[60vw] h-[60vw] top-[-15%] left-[-15%]" style="background:radial-gradient(circle,rgba(194,119,122,0.12) 0%,rgba(194,119,122,0) 70%)"></div>
+  <div class="pulse-blob w-[50vw] h-[50vw] bottom-[-10%] right-[-10%]" style="background:radial-gradient(circle,rgba(232,165,152,0.08) 0%,rgba(232,165,152,0) 70%)"></div>
+</div>
+
+<!-- Toast Container -->
+<div id="toast-container"></div>
+
+<!-- Modal Container -->
+<div id="modal-container"></div>
+
+<!-- ==================== LOGIN PAGE ==================== -->
+<div id="login-page" class="relative z-10 min-h-screen flex items-center justify-center p-4">
+  <div class="w-full max-w-sm">
+    <div class="text-center mb-8">
+      <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl btn-gradient mb-3 shadow-[0_8px_24px_rgba(194,119,122,0.35)]">
+        <span class="material-symbols-outlined text-2xl" style="font-variation-settings:'FILL' 1">admin_panel_settings</span>
+      </div>
+      <h1 class="font-headline text-3xl font-extrabold tracking-tighter text-gradient">Admin Panel</h1>
+      <p class="text-sm text-on-surface-variant mt-1">Sign in to manage your captive portal</p>
     </div>
 
-    <!-- Main Admin Panel -->
-    <div id="admin-panel" class="hidden">
-        <!-- Top Navigation -->
-        <nav class="bg-white shadow-lg">
-            <div class="max-w-full mx-auto px-4">
-                <div class="flex justify-between items-center h-16">
-                    <div class="flex items-center">
-                        <h1 class="text-xl font-bold text-gray-800">Captive Portal Admin</h1>
-                    </div>
-                    <div class="flex items-center space-x-4">
-                        <span class="text-gray-700" id="admin-name"></span>
-                        <button onclick="logout()" class="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700">
-                            <i class="fas fa-sign-out-alt mr-2"></i>Logout
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </nav>
-
-        <div class="flex">
-            <!-- Sidebar -->
-            <aside class="w-64 bg-white h-screen shadow-lg">
-                <nav class="mt-4">
-                    <a href="#" onclick="showSection('dashboard')" class="sidebar-link active flex items-center px-6 py-3 text-gray-700 hover:bg-gray-100">
-                        <i class="fas fa-chart-line mr-3"></i>Dashboard
-                    </a>
-                    <a href="#" onclick="showSection('users')" class="sidebar-link flex items-center px-6 py-3 text-gray-700 hover:bg-gray-100">
-                        <i class="fas fa-users mr-3"></i>Users
-                    </a>
-                    <a href="#" onclick="showSection('packages')" class="sidebar-link flex items-center px-6 py-3 text-gray-700 hover:bg-gray-100">
-                        <i class="fas fa-box mr-3"></i>Packages
-                    </a>
-                    <a href="#" onclick="showSection('routers')" class="sidebar-link flex items-center px-6 py-3 text-gray-700 hover:bg-gray-100">
-                        <i class="fas fa-network-wired mr-3"></i>Routers
-                    </a>
-                    <a href="#" onclick="showSection('sessions')" class="sidebar-link flex items-center px-6 py-3 text-gray-700 hover:bg-gray-100">
-                        <i class="fas fa-clock mr-3"></i>Sessions
-                    </a>
-                    <a href="#" onclick="showSection('payments')" class="sidebar-link flex items-center px-6 py-3 text-gray-700 hover:bg-gray-100">
-                        <i class="fas fa-money-bill mr-3"></i>Payments
-                    </a>
-                    <a href="#" onclick="showSection('estates')" class="sidebar-link flex items-center px-6 py-3 text-gray-700 hover:bg-gray-100">
-                        <i class="fas fa-building mr-3"></i>Estates
-                    </a>
-                    <a href="#" onclick="showSection('admins')" class="sidebar-link flex items-center px-6 py-3 text-gray-700 hover:bg-gray-100">
-                        <i class="fas fa-user-shield mr-3"></i>Admins
-                    </a>
-                    <a href="#" onclick="showSection('logs')" class="sidebar-link flex items-center px-6 py-3 text-gray-700 hover:bg-gray-100">
-                        <i class="fas fa-file-alt mr-3"></i>Audit Logs
-                    </a>
-                </nav>
-            </aside>
-
-            <!-- Main Content -->
-            <main class="flex-1 p-6 overflow-y-auto" style="height: calc(100vh - 64px);">
-                <!-- Dashboard Section -->
-                <div id="dashboard-section" class="section">
-                    <h2 class="text-2xl font-bold text-gray-800 mb-6">Dashboard</h2>
-                    
-                    <!-- Stats Cards -->
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
-                        <div class="bg-white p-6 rounded-lg shadow">
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <p class="text-gray-600 text-sm">Total Users</p>
-                                    <p class="text-3xl font-bold text-gray-800" id="stat-total-users">0</p>
-                                </div>
-                                <div class="bg-blue-100 p-3 rounded-full">
-                                    <i class="fas fa-users text-blue-600 text-2xl"></i>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="bg-white p-6 rounded-lg shadow">
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <p class="text-gray-600 text-sm">Active Users</p>
-                                    <p class="text-3xl font-bold text-green-600" id="stat-active-users">0</p>
-                                </div>
-                                <div class="bg-green-100 p-3 rounded-full">
-                                    <i class="fas fa-user-check text-green-600 text-2xl"></i>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="bg-white p-6 rounded-lg shadow">
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <p class="text-gray-600 text-sm">Revenue (Month)</p>
-                                    <p class="text-3xl font-bold text-purple-600" id="stat-revenue-month">KES 0</p>
-                                </div>
-                                <div class="bg-purple-100 p-3 rounded-full">
-                                    <i class="fas fa-money-bill-wave text-purple-600 text-2xl"></i>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="bg-white p-6 rounded-lg shadow">
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <p class="text-gray-600 text-sm">Routers Online</p>
-                                    <p class="text-3xl font-bold text-orange-600" id="stat-routers-online">0</p>
-                                </div>
-                                <div class="bg-orange-100 p-3 rounded-full">
-                                    <i class="fas fa-network-wired text-orange-600 text-2xl"></i>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Recent Activity -->
-                    <div class="bg-white p-6 rounded-lg shadow">
-                        <h3 class="text-xl font-bold text-gray-800 mb-4">Recent Activity</h3>
-                        <div id="recent-activity" class="space-y-2">
-                            <p class="text-gray-500">Loading...</p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Users Section -->
-                <div id="users-section" class="section hidden">
-                    <div class="flex justify-between items-center mb-6">
-                        <h2 class="text-2xl font-bold text-gray-800">Users Management</h2>
-                        <button onclick="searchUsers()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
-                            <i class="fas fa-search mr-2"></i>Search
-                        </button>
-                    </div>
-                    <div class="bg-white rounded-lg shadow overflow-hidden">
-                        <table class="min-w-full">
-                            <thead class="bg-gray-50">
-                                <tr>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Username</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Package</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="users-table-body" class="bg-white divide-y divide-gray-200">
-                                <tr>
-                                    <td colspan="5" class="px-6 py-4 text-center text-gray-500">Loading users...</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <!-- Packages Section -->
-                <div id="packages-section" class="section hidden">
-                    <div class="flex justify-between items-center mb-6">
-                        <h2 class="text-2xl font-bold text-gray-800">Packages Management</h2>
-                        <button onclick="showAddPackageModal()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
-                            <i class="fas fa-plus mr-2"></i>Add Package
-                        </button>
-                    </div>
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="packages-grid">
-                        <p class="text-gray-500">Loading packages...</p>
-                    </div>
-                </div>
-
-                <!-- Routers Section -->
-                <div id="routers-section" class="section hidden">
-                    <div class="flex justify-between items-center mb-6">
-                        <h2 class="text-2xl font-bold text-gray-800">MikroTik Routers</h2>
-                        <button onclick="showAddRouterModal()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
-                            <i class="fas fa-plus mr-2"></i>Add Router
-                        </button>
-                    </div>
-
-                    <!-- Router detail view (hidden by default) -->
-                    <div id="router-detail-view" class="hidden mb-6">
-                        <div class="flex items-center mb-4">
-                            <button onclick="closeRouterDetail()" class="mr-3 text-gray-600 hover:text-gray-900">
-                                <i class="fas fa-arrow-left text-xl"></i>
-                            </button>
-                            <h3 class="text-xl font-bold text-gray-800" id="router-detail-name">Router Details</h3>
-                            <span id="router-detail-status-badge" class="ml-3 px-3 py-1 text-sm rounded-full bg-gray-100 text-gray-600">Unknown</span>
-                        </div>
-
-                        <!-- Detail tabs -->
-                        <div class="border-b border-gray-200 mb-4">
-                            <nav class="flex space-x-6">
-                                <button onclick="showRouterTab('info')" id="tab-info"
-                                    class="router-tab-btn pb-3 border-b-2 border-blue-600 text-blue-600 font-medium text-sm">
-                                    System Info
-                                </button>
-                                <button onclick="showRouterTab('sessions')" id="tab-sessions"
-                                    class="router-tab-btn pb-3 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm">
-                                    Active Sessions
-                                </button>
-                                <button onclick="showRouterTab('hotspot-users')" id="tab-hotspot-users"
-                                    class="router-tab-btn pb-3 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm">
-                                    Hotspot Users
-                                </button>
-                                <button onclick="showRouterTab('setup')" id="tab-setup"
-                                    class="router-tab-btn pb-3 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm">
-                                    <i class="fas fa-terminal mr-1"></i>Setup Script
-                                </button>
-                                <button onclick="showRouterTab('logs')" id="tab-logs"
-                                    class="router-tab-btn pb-3 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium text-sm">
-                                    Logs
-                                </button>
-                            </nav>
-                        </div>
-
-                        <!-- System Info Tab -->
-                        <div id="router-tab-info" class="router-tab-content">
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                                <div class="bg-white rounded-lg shadow p-4">
-                                    <h4 class="font-semibold text-gray-700 mb-3"><i class="fas fa-server mr-2 text-blue-600"></i>System</h4>
-                                    <div id="router-info-system" class="space-y-2 text-sm">
-                                        <p class="text-gray-500">Loading...</p>
-                                    </div>
-                                </div>
-                                <div class="bg-white rounded-lg shadow p-4">
-                                    <h4 class="font-semibold text-gray-700 mb-3"><i class="fas fa-memory mr-2 text-green-600"></i>Resources</h4>
-                                    <div id="router-info-resources" class="space-y-2 text-sm">
-                                        <p class="text-gray-500">Loading...</p>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="bg-white rounded-lg shadow p-4">
-                                <h4 class="font-semibold text-gray-700 mb-3"><i class="fas fa-ethernet mr-2 text-purple-600"></i>Interfaces</h4>
-                                <div id="router-info-interfaces" class="overflow-x-auto">
-                                    <p class="text-gray-500 text-sm">Loading...</p>
-                                </div>
-                            </div>
-                            <div class="flex space-x-3 mt-4">
-                                <button id="router-detail-test-btn" onclick="testRouterFromDetail()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm">
-                                    <i class="fas fa-plug mr-2"></i>Test Connection
-                                </button>
-                                <button id="router-detail-sync-btn" onclick="syncRouterFromDetail()" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 text-sm">
-                                    <i class="fas fa-sync mr-2"></i>Sync Packages
-                                </button>
-                                <button id="router-detail-edit-btn" onclick="editRouterFromDetail()" class="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 text-sm">
-                                    <i class="fas fa-edit mr-2"></i>Edit Router
-                                </button>
-                                <button id="router-detail-delete-btn" onclick="deleteRouterFromDetail()" class="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 text-sm">
-                                    <i class="fas fa-trash mr-2"></i>Delete
-                                </button>
-                            </div>
-                        </div>
-
-                        <!-- Sessions Tab -->
-                        <div id="router-tab-sessions" class="router-tab-content hidden">
-                            <div class="flex justify-between items-center mb-3">
-                                <p class="text-sm text-gray-500">Live sessions directly from MikroTik router</p>
-                                <button onclick="refreshRouterSessions()" class="text-sm bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700">
-                                    <i class="fas fa-sync mr-1"></i>Refresh
-                                </button>
-                            </div>
-                            <div class="bg-white rounded-lg shadow overflow-x-auto">
-                                <table class="min-w-full">
-                                    <thead class="bg-gray-50">
-                                        <tr>
-                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">User</th>
-                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">IP Address</th>
-                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">MAC</th>
-                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Uptime</th>
-                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Data In/Out</th>
-                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="router-sessions-tbody" class="divide-y divide-gray-200">
-                                        <tr><td colspan="6" class="px-4 py-4 text-center text-gray-500">Loading sessions...</td></tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-
-                        <!-- Hotspot Users Tab -->
-                        <div id="router-tab-hotspot-users" class="router-tab-content hidden">
-                            <div class="flex justify-between items-center mb-3">
-                                <p class="text-sm text-gray-500">Hotspot user accounts on this router</p>
-                                <button onclick="refreshHotspotUsers()" class="text-sm bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700">
-                                    <i class="fas fa-sync mr-1"></i>Refresh
-                                </button>
-                            </div>
-                            <div class="bg-white rounded-lg shadow overflow-x-auto">
-                                <table class="min-w-full">
-                                    <thead class="bg-gray-50">
-                                        <tr>
-                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Username</th>
-                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Profile</th>
-                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Comment</th>
-                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="router-hotspot-users-tbody" class="divide-y divide-gray-200">
-                                        <tr><td colspan="5" class="px-4 py-4 text-center text-gray-500">Loading users...</td></tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-
-                        <!-- Setup Script Tab -->
-                        <div id="router-tab-setup" class="router-tab-content hidden">
-                            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-                                <h4 class="font-semibold text-blue-800 mb-1"><i class="fas fa-info-circle mr-2"></i>How to connect your MikroTik</h4>
-                                <p class="text-sm text-blue-700">Copy the script below and paste it into your MikroTik terminal (via Winbox Terminal or SSH). It configures RADIUS, hotspot redirect, and API access automatically.</p>
-                            </div>
-                            <div id="setup-script-loading" class="text-center py-6 text-gray-400">
-                                <i class="fas fa-spinner fa-spin text-2xl mb-2"></i>
-                                <p>Generating script...</p>
-                            </div>
-                            <div id="setup-script-content" class="hidden">
-                                <div class="flex justify-between items-center mb-2">
-                                    <span class="text-sm font-medium text-gray-700">RouterOS Script</span>
-                                    <button onclick="copySetupScript()" class="text-sm bg-gray-700 text-white px-3 py-1 rounded hover:bg-gray-800">
-                                        <i class="fas fa-copy mr-1"></i>Copy Script
-                                    </button>
-                                </div>
-                                <pre id="setup-script-text"
-                                    class="bg-gray-900 text-green-400 rounded-lg p-4 text-xs font-mono overflow-x-auto whitespace-pre-wrap max-h-96 overflow-y-auto"></pre>
-                                <div class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-                                    <div class="bg-white border rounded p-3">
-                                        <p class="font-medium text-gray-700 mb-1"><i class="fas fa-check-circle text-green-500 mr-1"></i>Step 1</p>
-                                        <p class="text-gray-500">Paste the script into MikroTik terminal and run it</p>
-                                    </div>
-                                    <div class="bg-white border rounded p-3">
-                                        <p class="font-medium text-gray-700 mb-1"><i class="fas fa-plug text-blue-500 mr-1"></i>Step 2</p>
-                                        <p class="text-gray-500">Click "Test Connection" on the System Info tab to verify</p>
-                                    </div>
-                                    <div class="bg-white border rounded p-3">
-                                        <p class="font-medium text-gray-700 mb-1"><i class="fas fa-sync text-purple-500 mr-1"></i>Step 3</p>
-                                        <p class="text-gray-500">Click "Sync Packages" to push WiFi packages to the router</p>
-                                    </div>
-                                </div>
-                            </div>
-                            <div id="setup-script-error" class="hidden text-center py-6 text-red-500">
-                                <i class="fas fa-exclamation-circle text-2xl mb-2"></i>
-                                <p id="setup-script-error-msg">Failed to generate script</p>
-                            </div>
-                        </div>
-
-                        <!-- Logs Tab -->
-                        <div id="router-tab-logs" class="router-tab-content hidden">
-                            <div class="bg-white rounded-lg shadow overflow-x-auto">
-                                <table class="min-w-full">
-                                    <thead class="bg-gray-50">
-                                        <tr>
-                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Time</th>
-                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Admin</th>
-                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Action</th>
-                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Result</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="router-logs-tbody" class="divide-y divide-gray-200">
-                                        <tr><td colspan="4" class="px-4 py-4 text-center text-gray-500">Loading logs...</td></tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Routers grid (card list) -->
-                    <div id="routers-grid-view">
-                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="routers-grid">
-                            <p class="text-gray-500">Loading routers...</p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Sessions Section -->
-                <div id="sessions-section" class="section hidden">
-                    <h2 class="text-2xl font-bold text-gray-800 mb-6">Active Sessions</h2>
-                    <div class="bg-white rounded-lg shadow overflow-hidden">
-                        <table class="min-w-full">
-                            <thead class="bg-gray-50">
-                                <tr>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Username</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Package</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Start Time</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Expires</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="sessions-table-body" class="bg-white divide-y divide-gray-200">
-                                <tr>
-                                    <td colspan="5" class="px-6 py-4 text-center text-gray-500">Loading sessions...</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <!-- Payments Section -->
-                <div id="payments-section" class="section hidden">
-                    <h2 class="text-2xl font-bold text-gray-800 mb-6">Payments & Transactions</h2>
-                    <div class="bg-white rounded-lg shadow overflow-hidden">
-                        <table class="min-w-full">
-                            <thead class="bg-gray-50">
-                                <tr>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Transaction ID</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">User</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
-                                </tr>
-                            </thead>
-                            <tbody id="payments-table-body" class="bg-white divide-y divide-gray-200">
-                                <tr>
-                                    <td colspan="5" class="px-6 py-4 text-center text-gray-500">Loading payments...</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <!-- Estates Section -->
-                <div id="estates-section" class="section hidden">
-                    <div class="flex justify-between items-center mb-6">
-                        <h2 class="text-2xl font-bold text-gray-800">Estates Management</h2>
-                        <button onclick="showAddEstateModal()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
-                            <i class="fas fa-plus mr-2"></i>Add Estate
-                        </button>
-                    </div>
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="estates-grid">
-                        <p class="text-gray-500">Loading estates...</p>
-                    </div>
-                </div>
-
-                <!-- Admins Section -->
-                <div id="admins-section" class="section hidden">
-                    <div class="flex justify-between items-center mb-6">
-                        <h2 class="text-2xl font-bold text-gray-800">Admin Users</h2>
-                        <button onclick="showAddAdminModal()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
-                            <i class="fas fa-plus mr-2"></i>Add Admin
-                        </button>
-                    </div>
-                    <div class="bg-white rounded-lg shadow overflow-hidden">
-                        <table class="min-w-full">
-                            <thead class="bg-gray-50">
-                                <tr>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Username</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Roles</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="admins-table-body" class="bg-white divide-y divide-gray-200">
-                                <tr>
-                                    <td colspan="5" class="px-6 py-4 text-center text-gray-500">Loading admins...</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <!-- Logs Section -->
-                <div id="logs-section" class="section hidden">
-                    <h2 class="text-2xl font-bold text-gray-800 mb-6">Audit Logs</h2>
-                    <div class="bg-white rounded-lg shadow overflow-hidden">
-                        <table class="min-w-full">
-                            <thead class="bg-gray-50">
-                                <tr>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Timestamp</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Admin</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Action</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Resource</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                                </tr>
-                            </thead>
-                            <tbody id="logs-table-body" class="bg-white divide-y divide-gray-200">
-                                <tr>
-                                    <td colspan="5" class="px-6 py-4 text-center text-gray-500">Loading logs...</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </main>
+    <div class="liquid-glass rounded-2xl p-6 shadow-[0_0_60px_-15px_rgba(194,119,122,0.08)]">
+      <form id="login-form" class="flex flex-col gap-4">
+        <div>
+          <label class="block text-xs font-semibold text-on-surface-variant uppercase tracking-wider mb-1.5">Username or Email</label>
+          <input type="text" id="login-username" required class="glass-input" placeholder="admin"/>
         </div>
+        <div>
+          <label class="block text-xs font-semibold text-on-surface-variant uppercase tracking-wider mb-1.5">Password</label>
+          <input type="password" id="login-password" required class="glass-input" placeholder="••••••••"/>
+        </div>
+        <button type="submit" id="login-btn"
+          class="w-full py-3 rounded-xl btn-gradient font-bold text-sm flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(194,119,122,0.2)] hover:shadow-[0_0_30px_rgba(194,119,122,0.4)] transition-all mt-1">
+          <span id="login-btn-text">Sign In</span>
+          <div id="login-spinner" class="spinner hidden"></div>
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== ADMIN PANEL ==================== -->
+<div id="admin-panel" class="hidden relative z-10 flex h-screen">
+
+  <!-- Sidebar -->
+  <aside class="w-56 shrink-0 flex flex-col bg-surface-container-low border-r border-outline-variant/15 h-screen overflow-y-auto">
+    <div class="px-5 py-5 border-b border-outline-variant/15">
+      <div class="font-headline font-black text-gradient text-xl tracking-tighter">SmartWiFi</div>
+      <div class="text-xs text-on-surface-variant mt-0.5 font-mono">Admin Console</div>
     </div>
 
-    <!-- Modals will be added dynamically -->
-    <div id="modal-container"></div>
+    <div class="px-4 py-3 border-b border-outline-variant/15">
+      <div class="flex items-center gap-2">
+        <div class="w-7 h-7 rounded-full btn-gradient flex items-center justify-center text-xs font-bold text-on-primary shrink-0">A</div>
+        <span id="admin-name" class="text-sm font-semibold text-on-surface truncate"></span>
+      </div>
+    </div>
 
-    <script src="admin.js"></script>
+    <nav class="flex-1 py-2">
+      <a href="#" onclick="showSection('dashboard')" class="sidebar-link active">
+        <span class="material-symbols-outlined text-sm">dashboard</span> Dashboard
+      </a>
+      <a href="#" onclick="showSection('users')" class="sidebar-link">
+        <span class="material-symbols-outlined text-sm">group</span> Users
+      </a>
+      <a href="#" onclick="showSection('packages')" class="sidebar-link">
+        <span class="material-symbols-outlined text-sm">inventory_2</span> Packages
+      </a>
+      <a href="#" onclick="showSection('routers')" class="sidebar-link">
+        <span class="material-symbols-outlined text-sm">router</span> Routers
+      </a>
+      <a href="#" onclick="showSection('sessions')" class="sidebar-link">
+        <span class="material-symbols-outlined text-sm">schedule</span> Sessions
+      </a>
+      <a href="#" onclick="showSection('payments')" class="sidebar-link">
+        <span class="material-symbols-outlined text-sm">payments</span> Payments
+      </a>
+      <a href="#" onclick="showSection('estates')" class="sidebar-link">
+        <span class="material-symbols-outlined text-sm">apartment</span> Estates
+      </a>
+      <a href="#" onclick="showSection('admins')" class="sidebar-link">
+        <span class="material-symbols-outlined text-sm">manage_accounts</span> Admins
+      </a>
+      <a href="#" onclick="showSection('logs')" class="sidebar-link">
+        <span class="material-symbols-outlined text-sm">article</span> Audit Logs
+      </a>
+    </nav>
+
+    <div class="px-4 py-3 border-t border-outline-variant/15">
+      <button onclick="logout()" class="w-full flex items-center gap-2 text-sm text-on-surface-variant hover:text-error transition-colors py-1">
+        <span class="material-symbols-outlined text-sm">logout</span> Logout
+      </button>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="flex-1 overflow-y-auto p-6 bg-surface-container-lowest">
+
+    <!-- ── DASHBOARD SECTION ── -->
+    <div id="dashboard-section" class="section">
+      <h2 class="font-headline text-2xl font-bold text-on-surface mb-6">Dashboard</h2>
+
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div class="liquid-glass rounded-xl p-4">
+          <p class="text-xs text-on-surface-variant mb-1">Total Users</p>
+          <p class="font-headline text-2xl font-bold text-on-surface" id="stat-total-users">0</p>
+          <span class="material-symbols-outlined text-primary text-sm mt-1 block">group</span>
+        </div>
+        <div class="liquid-glass rounded-xl p-4">
+          <p class="text-xs text-on-surface-variant mb-1">Active Users</p>
+          <p class="font-headline text-2xl font-bold text-primary" id="stat-active-users">0</p>
+          <span class="material-symbols-outlined text-primary text-sm mt-1 block">person_check</span>
+        </div>
+        <div class="liquid-glass rounded-xl p-4">
+          <p class="text-xs text-on-surface-variant mb-1">Revenue (Month)</p>
+          <p class="font-headline text-2xl font-bold text-secondary font-mono" id="stat-revenue-month">KES 0</p>
+          <span class="material-symbols-outlined text-secondary text-sm mt-1 block">payments</span>
+        </div>
+        <div class="liquid-glass rounded-xl p-4">
+          <p class="text-xs text-on-surface-variant mb-1">Routers Online</p>
+          <p class="font-headline text-2xl font-bold text-on-surface" id="stat-routers-online">0</p>
+          <span class="material-symbols-outlined text-primary text-sm mt-1 block">router</span>
+        </div>
+      </div>
+
+      <div class="liquid-glass rounded-xl p-5">
+        <h3 class="font-headline text-base font-bold text-on-surface mb-4">Recent Activity</h3>
+        <div id="recent-activity" class="space-y-2">
+          <p class="text-on-surface-variant text-sm">Loading...</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── USERS SECTION ── -->
+    <div id="users-section" class="section hidden">
+      <div class="flex justify-between items-center mb-5">
+        <h2 class="font-headline text-2xl font-bold text-on-surface">Users Management</h2>
+        <button onclick="searchUsers()" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl btn-gradient font-semibold text-sm">
+          <span class="material-symbols-outlined text-sm">search</span> Search
+        </button>
+      </div>
+      <div class="liquid-glass rounded-xl overflow-hidden table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Username</th><th>Email</th><th>Status</th><th>Package</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="users-table-body">
+            <tr><td colspan="5" class="text-center text-on-surface-variant py-6">Loading users...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ── PACKAGES SECTION ── -->
+    <div id="packages-section" class="section hidden">
+      <div class="flex justify-between items-center mb-5">
+        <h2 class="font-headline text-2xl font-bold text-on-surface">Packages Management</h2>
+        <button onclick="showAddPackageModal()" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl btn-gradient font-semibold text-sm">
+          <span class="material-symbols-outlined text-sm">add</span> Add Package
+        </button>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="packages-grid">
+        <p class="text-on-surface-variant text-sm">Loading packages...</p>
+      </div>
+    </div>
+
+    <!-- ── ROUTERS SECTION ── -->
+    <div id="routers-section" class="section hidden">
+      <div class="flex justify-between items-center mb-5">
+        <h2 class="font-headline text-2xl font-bold text-on-surface">MikroTik Routers</h2>
+        <button onclick="showAddRouterModal()" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl btn-gradient font-semibold text-sm">
+          <span class="material-symbols-outlined text-sm">add</span> Add Router
+        </button>
+      </div>
+
+      <!-- Router Detail View (hidden by default) -->
+      <div id="router-detail-view" class="hidden mb-5">
+        <div class="flex items-center gap-3 mb-4">
+          <button onclick="closeRouterDetail()" class="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 text-on-surface-variant transition-colors">
+            <span class="material-symbols-outlined text-sm">arrow_back</span>
+          </button>
+          <h3 class="font-headline text-xl font-bold text-on-surface" id="router-detail-name">Router Details</h3>
+          <span id="router-detail-status-badge" class="text-xs px-2.5 py-1 rounded-full bg-outline-variant/30 text-on-surface-variant font-mono">Unknown</span>
+        </div>
+
+        <!-- Router Action Buttons -->
+        <div class="flex flex-wrap gap-2 mb-4">
+          <button id="router-detail-test-btn" onclick="testRouterFromDetail()" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/15 text-primary hover:bg-primary/25 transition-colors text-sm">
+            <span class="material-symbols-outlined text-sm">cable</span> Test
+          </button>
+          <button id="router-detail-sync-btn" onclick="syncRouterFromDetail()" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-secondary/15 text-secondary hover:bg-secondary/25 transition-colors text-sm">
+            <span class="material-symbols-outlined text-sm">sync</span> Sync
+          </button>
+          <button id="router-detail-edit-btn" onclick="editRouterFromDetail()" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 text-on-surface-variant hover:bg-white/10 transition-colors text-sm">
+            <span class="material-symbols-outlined text-sm">edit</span> Edit
+          </button>
+          <button id="router-detail-delete-btn" onclick="deleteRouterFromDetail()" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-error/15 text-error hover:bg-error/25 transition-colors text-sm">
+            <span class="material-symbols-outlined text-sm">delete</span> Delete
+          </button>
+        </div>
+
+        <!-- Router Tabs -->
+        <div class="flex border-b border-outline-variant/20 mb-4 overflow-x-auto">
+          <button onclick="showRouterTab('info')" id="tab-info" class="router-tab-btn active">System Info</button>
+          <button onclick="showRouterTab('sessions')" id="tab-sessions" class="router-tab-btn">Sessions</button>
+          <button onclick="showRouterTab('hotspot-users')" id="tab-hotspot-users" class="router-tab-btn">Hotspot Users</button>
+          <button onclick="showRouterTab('setup')" id="tab-setup" class="router-tab-btn">Setup Script</button>
+          <button onclick="showRouterTab('logs')" id="tab-logs" class="router-tab-btn">Logs</button>
+        </div>
+
+        <!-- Tab: System Info -->
+        <div id="router-tab-info" class="router-tab-content">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div class="liquid-glass rounded-xl p-4">
+              <h4 class="font-semibold text-on-surface text-sm mb-3 flex items-center gap-2">
+                <span class="material-symbols-outlined text-primary text-sm">dns</span> System
+              </h4>
+              <div id="router-info-system" class="space-y-1.5 text-sm text-on-surface-variant">
+                <p>Loading...</p>
+              </div>
+            </div>
+            <div class="liquid-glass rounded-xl p-4">
+              <h4 class="font-semibold text-on-surface text-sm mb-3 flex items-center gap-2">
+                <span class="material-symbols-outlined text-primary text-sm">memory</span> Resources
+              </h4>
+              <div id="router-info-resources" class="space-y-1.5 text-sm text-on-surface-variant">
+                <p>Loading...</p>
+              </div>
+            </div>
+          </div>
+          <div class="liquid-glass rounded-xl p-4">
+            <h4 class="font-semibold text-on-surface text-sm mb-3 flex items-center gap-2">
+              <span class="material-symbols-outlined text-primary text-sm">settings_ethernet</span> Interfaces
+            </h4>
+            <div id="router-info-interfaces" class="overflow-x-auto">
+              <p class="text-sm text-on-surface-variant">Loading...</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab: Sessions -->
+        <div id="router-tab-sessions" class="router-tab-content hidden">
+          <div class="flex justify-between items-center mb-3">
+            <p class="text-sm text-on-surface-variant">Live sessions directly from MikroTik</p>
+            <button onclick="refreshRouterSessions()" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg btn-gradient text-sm font-semibold">
+              <span class="material-symbols-outlined text-sm">refresh</span> Refresh
+            </button>
+          </div>
+          <div class="liquid-glass rounded-xl overflow-hidden table-wrap">
+            <table class="data-table">
+              <thead><tr><th>User</th><th>IP Address</th><th>MAC</th><th>Uptime</th><th>Data In/Out</th><th>Actions</th></tr></thead>
+              <tbody id="router-sessions-tbody">
+                <tr><td colspan="6" class="text-center text-on-surface-variant py-5">Loading sessions...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Tab: Hotspot Users -->
+        <div id="router-tab-hotspot-users" class="router-tab-content hidden">
+          <div class="flex justify-between items-center mb-3">
+            <p class="text-sm text-on-surface-variant">Hotspot user accounts on this router</p>
+            <button onclick="refreshHotspotUsers()" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg btn-gradient text-sm font-semibold">
+              <span class="material-symbols-outlined text-sm">refresh</span> Refresh
+            </button>
+          </div>
+          <div class="liquid-glass rounded-xl overflow-hidden table-wrap">
+            <table class="data-table">
+              <thead><tr><th>Username</th><th>Profile</th><th>Status</th><th>Comment</th><th>Actions</th></tr></thead>
+              <tbody id="router-hotspot-users-tbody">
+                <tr><td colspan="5" class="text-center text-on-surface-variant py-5">Loading users...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Tab: Setup Script -->
+        <div id="router-tab-setup" class="router-tab-content hidden">
+          <div class="bg-primary/10 border border-primary/20 rounded-xl p-4 mb-4">
+            <h4 class="font-semibold text-on-surface text-sm mb-1 flex items-center gap-2">
+              <span class="material-symbols-outlined text-primary text-sm">info</span> How to connect your MikroTik
+            </h4>
+            <p class="text-sm text-on-surface-variant">Copy the script below and paste it into your MikroTik terminal (Winbox or SSH). It configures RADIUS, hotspot redirect, and API access automatically.</p>
+          </div>
+          <div id="setup-script-loading" class="text-center py-8 text-on-surface-variant">
+            <div class="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+            <p class="text-sm">Generating script...</p>
+          </div>
+          <div id="setup-script-content" class="hidden">
+            <div class="flex justify-between items-center mb-2">
+              <span class="text-sm font-medium text-on-surface">RouterOS Script</span>
+              <button onclick="copySetupScript()" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-bright hover:bg-surface-container-highest text-on-surface text-sm transition-colors">
+                <span class="material-symbols-outlined text-sm">content_copy</span> Copy
+              </button>
+            </div>
+            <pre id="setup-script-text" class="bg-surface-container-low text-secondary rounded-xl p-4 text-xs font-mono overflow-x-auto whitespace-pre-wrap max-h-96 overflow-y-auto border border-outline-variant/20"></pre>
+            <div class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+              <div class="liquid-glass rounded-xl p-3">
+                <p class="font-semibold text-on-surface mb-1 text-xs flex items-center gap-1.5">
+                  <span class="material-symbols-outlined text-primary text-xs" style="font-variation-settings:'FILL' 1">check_circle</span> Step 1
+                </p>
+                <p class="text-xs text-on-surface-variant">Paste the script into MikroTik terminal and run it</p>
+              </div>
+              <div class="liquid-glass rounded-xl p-3">
+                <p class="font-semibold text-on-surface mb-1 text-xs flex items-center gap-1.5">
+                  <span class="material-symbols-outlined text-primary text-xs">cable</span> Step 2
+                </p>
+                <p class="text-xs text-on-surface-variant">Click "Test" to verify connection</p>
+              </div>
+              <div class="liquid-glass rounded-xl p-3">
+                <p class="font-semibold text-on-surface mb-1 text-xs flex items-center gap-1.5">
+                  <span class="material-symbols-outlined text-primary text-xs">sync</span> Step 3
+                </p>
+                <p class="text-xs text-on-surface-variant">Click "Sync" to push WiFi packages</p>
+              </div>
+            </div>
+          </div>
+          <div id="setup-script-error" class="hidden text-center py-8">
+            <span class="material-symbols-outlined text-error text-3xl mb-2 block">error</span>
+            <p id="setup-script-error-msg" class="text-sm text-error">Failed to generate script</p>
+          </div>
+        </div>
+
+        <!-- Tab: Router Logs -->
+        <div id="router-tab-logs" class="router-tab-content hidden">
+          <div class="liquid-glass rounded-xl overflow-hidden table-wrap">
+            <table class="data-table">
+              <thead><tr><th>Time</th><th>Admin</th><th>Action</th><th>Result</th></tr></thead>
+              <tbody id="router-logs-tbody">
+                <tr><td colspan="4" class="text-center text-on-surface-variant py-5">Loading logs...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Routers Grid View -->
+      <div id="routers-grid-view">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="routers-grid">
+          <p class="text-on-surface-variant text-sm">Loading routers...</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── SESSIONS SECTION ── -->
+    <div id="sessions-section" class="section hidden">
+      <h2 class="font-headline text-2xl font-bold text-on-surface mb-5">Active Sessions</h2>
+      <div class="liquid-glass rounded-xl overflow-hidden table-wrap">
+        <table class="data-table">
+          <thead><tr><th>Username</th><th>Package</th><th>Start Time</th><th>Expires</th><th>Actions</th></tr></thead>
+          <tbody id="sessions-table-body">
+            <tr><td colspan="5" class="text-center text-on-surface-variant py-6">Loading sessions...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ── PAYMENTS SECTION ── -->
+    <div id="payments-section" class="section hidden">
+      <h2 class="font-headline text-2xl font-bold text-on-surface mb-5">Payments &amp; Transactions</h2>
+      <div class="liquid-glass rounded-xl overflow-hidden table-wrap">
+        <table class="data-table">
+          <thead><tr><th>Transaction ID</th><th>User</th><th>Amount</th><th>Status</th><th>Date</th></tr></thead>
+          <tbody id="payments-table-body">
+            <tr><td colspan="5" class="text-center text-on-surface-variant py-6">Loading payments...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ── ESTATES SECTION ── -->
+    <div id="estates-section" class="section hidden">
+      <div class="flex justify-between items-center mb-5">
+        <h2 class="font-headline text-2xl font-bold text-on-surface">Estates Management</h2>
+        <button onclick="showAddEstateModal()" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl btn-gradient font-semibold text-sm">
+          <span class="material-symbols-outlined text-sm">add</span> Add Estate
+        </button>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="estates-grid">
+        <p class="text-on-surface-variant text-sm">Loading estates...</p>
+      </div>
+    </div>
+
+    <!-- ── ADMINS SECTION ── -->
+    <div id="admins-section" class="section hidden">
+      <div class="flex justify-between items-center mb-5">
+        <h2 class="font-headline text-2xl font-bold text-on-surface">Admin Users</h2>
+        <button onclick="showAddAdminModal()" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl btn-gradient font-semibold text-sm">
+          <span class="material-symbols-outlined text-sm">person_add</span> Add Admin
+        </button>
+      </div>
+      <div class="liquid-glass rounded-xl overflow-hidden table-wrap">
+        <table class="data-table">
+          <thead><tr><th>Username</th><th>Email</th><th>Roles</th><th>Status</th><th>Actions</th></tr></thead>
+          <tbody id="admins-table-body">
+            <tr><td colspan="5" class="text-center text-on-surface-variant py-6">Loading admins...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ── LOGS SECTION ── -->
+    <div id="logs-section" class="section hidden">
+      <h2 class="font-headline text-2xl font-bold text-on-surface mb-5">Audit Logs</h2>
+      <div class="liquid-glass rounded-xl overflow-hidden table-wrap">
+        <table class="data-table">
+          <thead><tr><th>Timestamp</th><th>Admin</th><th>Action</th><th>Resource</th><th>Status</th></tr></thead>
+          <tbody id="logs-table-body">
+            <tr><td colspan="5" class="text-center text-on-surface-variant py-6">Loading logs...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script src="admin.js"></script>
 </body>
 </html>

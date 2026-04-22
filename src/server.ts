@@ -21,6 +21,7 @@ import userRoutes from './routes/userRoutes';
 import profileRoutes from './routes/profileRoutes';
 import adminProfileRoutes from './routes/adminProfileRoutes';
 import publicRoutes from './routes/publicRoutes';
+import mpesaCallbackRoutes from './routes/mpesaCallbacks';
 
 class Server {
     public app: express.Application;
@@ -181,6 +182,9 @@ class Server {
                 });
             }
         });
+
+        // M-Pesa callback routes (no auth prefix — Safaricom calls these directly)
+        this.app.use('/callbacks/mpesa', mpesaCallbackRoutes);
 
         // API routes (must be before catch-all routes)
         this.app.use('/api/portal', portalRoutes);

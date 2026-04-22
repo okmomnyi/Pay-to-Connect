@@ -1,182 +1,206 @@
 <!DOCTYPE html>
-<html lang="en">
+<html class="dark" lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SmartWiFi — Login</title>
-  <link rel="stylesheet" href="portal.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <!-- Tailwind needed for login.js tab toggle classes -->
-  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;500;700&family=JetBrains+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+  <script>
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "primary": "#C2777A", "secondary": "#E8A598",
+            "on-primary": "#4a1c1f", "on-surface": "#e7e4f0",
+            "on-surface-variant": "#acaab5",
+            "surface-container-lowest": "#000000",
+            "surface-container-low": "#13121c",
+            "surface-container": "#191923",
+            "surface-container-high": "#1f1f2a",
+            "surface-container-highest": "#252531",
+            "surface-bright": "#2b2b38",
+            "outline-variant": "#484751", "outline": "#76747f",
+            "error": "#ff716c"
+          },
+          fontFamily: {
+            "headline": ["Syne", "sans-serif"],
+            "body": ["DM Sans", "sans-serif"],
+            "mono": ["JetBrains Mono", "monospace"]
+          },
+          borderRadius: { "xl": "0.75rem", "2xl": "1.5rem", "full": "9999px" }
+        }
+      }
+    }
+  </script>
   <style>
-    /* Ensure tab active states look right with our design */
-    #loginTab.bg-white, #registerTab.bg-white {
-      background: var(--primary) !important;
-      color: white !important;
-      box-shadow: 0 2px 8px rgba(79,70,229,.3) !important;
+    body { font-family: 'DM Sans', sans-serif; background-color: #000000; color: #e7e4f0; }
+    h1, h2, h3, h4 { font-family: 'Syne', sans-serif; }
+
+    .pulse-blob-1 {
+      position: absolute; top: -10%; left: -10%;
+      width: 50vw; height: 50vw;
+      background: radial-gradient(circle, rgba(194,119,122,0.15) 0%, rgba(194,119,122,0) 70%);
+      filter: blur(80px); z-index: 0; pointer-events: none;
     }
-    #loginTab.text-blue-200, #registerTab.text-blue-200 {
-      color: var(--text-2) !important;
+    .pulse-blob-2 {
+      position: absolute; bottom: -20%; right: -10%;
+      width: 60vw; height: 60vw;
+      background: radial-gradient(circle, rgba(232,165,152,0.10) 0%, rgba(232,165,152,0) 70%);
+      filter: blur(100px); z-index: 0; pointer-events: none;
     }
-    .gradient-bg {
-      background: linear-gradient(145deg, #0f172a 0%, #1e293b 100%) !important;
+
+    .glass-card {
+      background: rgba(31,31,42,0.4);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(72,71,81,0.15);
+      border-radius: 0.75rem;
     }
+    .glass-input {
+      background-color: #13121c;
+      border: 1px solid rgba(72,71,81,0.15);
+      color: #e7e4f0;
+      border-radius: 0.75rem;
+      padding: 0.875rem 1.25rem;
+      width: 100%;
+      transition: all 0.3s ease;
+    }
+    .glass-input:focus {
+      outline: none;
+      border-color: #C2777A;
+      box-shadow: 0 0 0 2px rgba(194,119,122,0.2);
+    }
+    .glass-input::placeholder { color: #76747f; }
+
+    .btn-gradient { background: linear-gradient(135deg, #C2777A, #E8A598); color: #4a1c1f; }
+    .text-gradient {
+      background: linear-gradient(135deg, #C2777A, #E8A598);
+      -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .hidden { display: none !important; }
+
+    /* Pill toggle — login.js adds bg-white/bg-opacity-30/text-white to active, text-blue-200 to inactive */
+    #loginTab.bg-white  { background: rgba(194,119,122,0.2) !important; }
+    #registerTab.bg-white { background: rgba(194,119,122,0.2) !important; }
+    #loginTab.text-blue-200, #registerTab.text-blue-200 { color: #76747f !important; }
   </style>
 </head>
-<body class="gradient-bg min-h-screen flex flex-col items-center justify-center p-4">
-  <div class="w-full max-w-md">
+<body class="min-h-screen flex items-center justify-center relative overflow-hidden bg-surface-container-lowest text-on-surface antialiased p-4">
 
-    <!-- Brand -->
-    <div class="text-center mb-6">
-      <div style="width:56px;height:56px;background:linear-gradient(135deg,#4f46e5 0%,#7c3aed 100%);border-radius:16px;display:flex;align-items:center;justify-content:center;margin:0 auto 10px;box-shadow:0 8px 20px rgba(79,70,229,.45);">
-        <i class="fas fa-wifi text-2xl text-white"></i>
-      </div>
-      <h1 class="text-2xl font-bold text-white" style="letter-spacing:-.02em;">SmartWiFi</h1>
-      <p class="text-sm mt-1" style="color:#94a3b8;">Fast &amp; Reliable Internet Access</p>
+<div class="pulse-blob-1"></div>
+<div class="pulse-blob-2"></div>
+
+<main class="w-full max-w-md relative z-10">
+
+  <!-- Brand -->
+  <div class="text-center mb-10">
+    <h1 id="formTitle" class="font-headline text-4xl md:text-5xl font-bold tracking-tighter text-gradient mb-2">Login to Wi-Fi</h1>
+    <p id="formSubtitle" class="text-on-surface-variant text-sm font-medium">Access your account to purchase internet</p>
+  </div>
+
+  <!-- Auth Card -->
+  <div class="glass-card p-6 md:p-8 flex flex-col gap-7 shadow-[0_0_60px_-15px_rgba(232,165,152,0.05)]">
+
+    <!-- Error / Success messages -->
+    <div id="errorMessage" class="hidden bg-error/10 border border-error/25 rounded-xl p-3 flex items-center gap-2">
+      <span class="material-symbols-outlined text-error text-sm">error</span>
+      <span id="errorText" class="text-sm text-on-surface"></span>
+    </div>
+    <div id="successMessage" class="hidden bg-primary/10 border border-primary/25 rounded-xl p-3 flex items-center gap-2">
+      <span class="material-symbols-outlined text-primary text-sm" style="font-variation-settings:'FILL' 1">check_circle</span>
+      <span id="successText" class="text-sm text-on-surface"></span>
     </div>
 
-    <!-- Card -->
-    <div style="background:#fff;border-radius:20px;padding:28px 28px 24px;box-shadow:0 24px 48px rgba(0,0,0,.22);">
+    <!-- Pill Toggle -->
+    <div class="flex bg-surface-container-high rounded-full p-1 gap-1">
+      <button id="loginTab" class="flex-1 py-2.5 px-4 rounded-full text-sm font-semibold transition-all bg-white bg-opacity-30 text-white">Login</button>
+      <button id="registerTab" class="flex-1 py-2.5 px-4 rounded-full text-sm font-semibold transition-all text-blue-200">Register</button>
+    </div>
 
-      <!-- Tab toggle -->
-      <div class="flex rounded-xl p-1 mb-5"
-           style="background:#f1f5f9;border:1.5px solid #e2e8f0;">
-        <button id="loginTab"
-          class="flex-1 py-2 px-3 rounded-lg font-semibold text-sm transition-all duration-200 bg-white bg-opacity-30 text-white">
-          <i class="fas fa-sign-in-alt mr-1"></i> Login
-        </button>
-        <button id="registerTab"
-          class="flex-1 py-2 px-3 rounded-lg font-semibold text-sm transition-all duration-200 text-blue-200">
-          <i class="fas fa-user-plus mr-1"></i> Register
-        </button>
+    <!-- Login Form -->
+    <form id="loginForm" class="flex flex-col gap-5">
+      <div class="flex flex-col gap-2">
+        <label class="text-xs font-semibold text-on-surface-variant uppercase tracking-wider pl-1">Username or Email</label>
+        <div class="relative">
+          <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline text-sm pointer-events-none">person</span>
+          <input type="text" id="loginUsername" class="glass-input" style="padding-left:3rem;" placeholder="Username or email" required/>
+        </div>
       </div>
-
-      <!-- Dynamic header -->
-      <div class="text-center mb-5">
-        <h2 id="formTitle" style="font-size:1.125rem;font-weight:700;color:#1e293b;margin-bottom:3px;">Login to Wi-Fi</h2>
-        <p id="formSubtitle" style="font-size:.875rem;color:#64748b;">Access your account to purchase internet</p>
+      <div class="flex flex-col gap-2">
+        <div class="flex justify-between items-center pl-1 pr-1">
+          <label class="text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Password</label>
+          <a href="/forgot-password" class="text-xs text-primary hover:text-secondary transition-colors">Forgot?</a>
+        </div>
+        <div class="relative">
+          <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline text-sm pointer-events-none">lock</span>
+          <input type="password" id="loginPassword" class="glass-input" style="padding-left:3rem;" placeholder="Password" required/>
+        </div>
       </div>
+      <button type="submit" id="loginButton"
+        class="w-full py-3.5 rounded-xl btn-gradient font-bold text-sm flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(194,119,122,0.2)] hover:shadow-[0_0_30px_rgba(194,119,122,0.4)] transition-all mt-1 group">
+        <span class="material-symbols-outlined text-sm group-hover:translate-x-0.5 transition-transform">login</span> Sign In
+      </button>
+    </form>
 
-      <!-- Alerts -->
-      <div id="errorMessage" class="alert alert-error hidden">
-        <i class="fas fa-exclamation-circle"></i>
-        <span id="errorText"></span>
+    <!-- Register Form -->
+    <form id="registerForm" class="hidden flex-col gap-5">
+      <div class="grid grid-cols-2 gap-3">
+        <div class="flex flex-col gap-1.5">
+          <label class="text-xs font-semibold text-on-surface-variant uppercase tracking-wider pl-1">First Name</label>
+          <input type="text" id="firstName" class="glass-input" style="padding-left:1rem;" placeholder="First name" required/>
+        </div>
+        <div class="flex flex-col gap-1.5">
+          <label class="text-xs font-semibold text-on-surface-variant uppercase tracking-wider pl-1">Last Name</label>
+          <input type="text" id="lastName" class="glass-input" style="padding-left:1rem;" placeholder="Last name" required/>
+        </div>
       </div>
-      <div id="successMessage" class="alert alert-success hidden">
-        <i class="fas fa-check-circle"></i>
-        <span id="successText"></span>
+      <div class="flex flex-col gap-2">
+        <label class="text-xs font-semibold text-on-surface-variant uppercase tracking-wider pl-1">Username</label>
+        <div class="relative">
+          <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline text-sm pointer-events-none">alternate_email</span>
+          <input type="text" id="registerUsername" class="glass-input" style="padding-left:3rem;" placeholder="Choose a username" required/>
+        </div>
       </div>
-
-      <!-- Login Form -->
-      <form id="loginForm" class="space-y-4">
-        <div class="form-group">
-          <label class="form-label" for="loginUsername">Username or Email</label>
-          <div class="input-wrap">
-            <i class="fas fa-user input-icon"></i>
-            <input type="text" id="loginUsername" class="form-input" required
-                   placeholder="Enter username or email">
-          </div>
+      <div class="flex flex-col gap-2">
+        <label class="text-xs font-semibold text-on-surface-variant uppercase tracking-wider pl-1">Email</label>
+        <div class="relative">
+          <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline text-sm pointer-events-none">mail</span>
+          <input type="email" id="email" class="glass-input" style="padding-left:3rem;" placeholder="Email address" required/>
         </div>
-
-        <div class="form-group">
-          <label class="form-label" for="loginPassword">Password</label>
-          <div class="input-wrap">
-            <i class="fas fa-lock input-icon"></i>
-            <input type="password" id="loginPassword" class="form-input" required
-                   placeholder="Enter password">
-            <button type="button" class="input-toggle" onclick="toggleVis('loginPassword', this)">
-              <i class="fas fa-eye"></i>
-            </button>
-          </div>
+      </div>
+      <div class="flex flex-col gap-2">
+        <label class="text-xs font-semibold text-on-surface-variant uppercase tracking-wider pl-1">Phone Number</label>
+        <div class="flex items-center bg-surface-container-low rounded-xl border border-[rgba(72,71,81,0.15)] focus-within:border-primary transition-all overflow-hidden">
+          <span class="px-4 py-3.5 font-mono text-xs text-on-surface-variant bg-surface-bright border-r border-[rgba(72,71,81,0.15)] shrink-0">+254</span>
+          <input type="tel" id="phone" class="w-full bg-transparent border-none text-on-surface font-mono py-3.5 px-3 focus:ring-0 text-sm placeholder:text-outline-variant/60" placeholder="712 345 678" required/>
         </div>
-
-        <div class="text-center">
-          <a href="/forgot-password" class="text-link">
-            <i class="fas fa-key"></i> Forgot password?
-          </a>
+      </div>
+      <div class="flex flex-col gap-2">
+        <label class="text-xs font-semibold text-on-surface-variant uppercase tracking-wider pl-1">Password</label>
+        <div class="relative">
+          <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline text-sm pointer-events-none">lock</span>
+          <input type="password" id="registerPassword" class="glass-input" style="padding-left:3rem;" placeholder="Min 8 characters" required/>
         </div>
+      </div>
+      <button type="submit" id="registerButton"
+        class="w-full py-3.5 rounded-xl btn-gradient font-bold text-sm flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(194,119,122,0.2)] hover:shadow-[0_0_30px_rgba(194,119,122,0.4)] transition-all mt-1 group">
+        <span class="material-symbols-outlined text-sm group-hover:translate-x-0.5 transition-transform">person_add</span> Create Account
+      </button>
+    </form>
 
-        <button type="submit" id="loginButton" class="btn btn-primary">
-          <i class="fas fa-sign-in-alt"></i> Login
-        </button>
-      </form>
-
-      <!-- Register Form -->
-      <form id="registerForm" class="hidden space-y-4">
-        <div class="grid grid-cols-2 gap-3">
-          <div class="form-group" style="margin:0;">
-            <label class="form-label" for="firstName">First Name</label>
-            <input type="text" id="firstName" class="form-input" required placeholder="First name">
-          </div>
-          <div class="form-group" style="margin:0;">
-            <label class="form-label" for="lastName">Last Name</label>
-            <input type="text" id="lastName" class="form-input" required placeholder="Last name">
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label class="form-label" for="registerUsername">Username</label>
-          <div class="input-wrap">
-            <i class="fas fa-at input-icon"></i>
-            <input type="text" id="registerUsername" class="form-input" required
-                   placeholder="Choose a username">
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label class="form-label" for="email">Email Address</label>
-          <div class="input-wrap">
-            <i class="fas fa-envelope input-icon"></i>
-            <input type="email" id="email" class="form-input" required
-                   placeholder="you@example.com">
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label class="form-label" for="phone">Phone Number</label>
-          <div class="input-wrap">
-            <i class="fas fa-phone input-icon"></i>
-            <input type="tel" id="phone" class="form-input" required
-                   placeholder="0712 345 678">
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label class="form-label" for="registerPassword">Password</label>
-          <div class="input-wrap">
-            <i class="fas fa-lock input-icon"></i>
-            <input type="password" id="registerPassword" class="form-input" required
-                   placeholder="Min 6 characters">
-            <button type="button" class="input-toggle" onclick="toggleVis('registerPassword', this)">
-              <i class="fas fa-eye"></i>
-            </button>
-          </div>
-        </div>
-
-        <button type="submit" id="registerButton" class="btn btn-success">
-          <i class="fas fa-user-plus"></i> Create Account
-        </button>
-      </form>
-
-    </div><!-- /card -->
-
-    <!-- Back link -->
-    <div class="text-center mt-4">
-      <a href="/" class="text-sm" style="color:#64748b;text-decoration:none;">
-        <i class="fas fa-arrow-left"></i> Back to Portal
+    <!-- Footer -->
+    <div class="pt-4 border-t border-[rgba(72,71,81,0.15)] text-center">
+      <a href="/" class="text-xs text-on-surface-variant hover:text-primary transition-colors inline-flex items-center gap-1">
+        <span class="material-symbols-outlined text-xs">arrow_back</span> Back to Portal
       </a>
     </div>
 
   </div>
+</main>
 
-  <script>
-  function toggleVis(id, btn) {
-    const inp = document.getElementById(id);
-    const ico = btn.querySelector('i');
-    inp.type = inp.type === 'password' ? 'text' : 'password';
-    ico.className = inp.type === 'password' ? 'fas fa-eye' : 'fas fa-eye-slash';
-  }
-  </script>
-  <script src="login.js"></script>
+<script src="login.js"></script>
 </body>
 </html>

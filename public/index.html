@@ -1,229 +1,449 @@
 <!DOCTYPE html>
-<html lang="en">
+<html class="dark" lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SmartWiFi — Internet Access</title>
-  <link rel="stylesheet" href="portal.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <!-- Tailwind required for dynamically rendered package cards -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    /* Keep glass-effect and hidden utility for app.js compatibility */
-    .glass-effect {
-      background: rgba(255,255,255,.07);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      border: 1px solid rgba(255,255,255,.13);
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;500;700&family=JetBrains+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+  <script>
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "primary": "#e8856a", "secondary": "#f0a590",
+            "on-primary": "#3d1a0f", "on-surface": "#e7e4f0",
+            "on-surface-variant": "#acaab5",
+            "surface-container-lowest": "#0a0a0a",
+            "surface-container-low": "#131318",
+            "surface-container": "#1a1a22",
+            "surface-container-high": "#1f1f2a",
+            "surface-container-highest": "#252531",
+            "surface-bright": "#2b2b38",
+            "outline-variant": "#484751", "outline": "#76747f",
+            "error": "#ff716c"
+          },
+          fontFamily: {
+            "headline": ["Syne", "sans-serif"],
+            "body": ["DM Sans", "sans-serif"],
+            "mono": ["JetBrains Mono", "monospace"]
+          },
+          borderRadius: { "xl": "0.75rem", "2xl": "1.5rem", "full": "9999px" }
+        }
+      }
     }
-    .loading-spinner {
-      border: 3px solid rgba(255,255,255,.2);
-      border-top-color: white;
+  </script>
+  <style>
+    body { font-family: 'DM Sans', sans-serif; background-color: #0a0a0a; color: #e7e4f0; }
+    h1, h2, h3 { font-family: 'Syne', sans-serif; }
+
+    .pulse-blob-1 {
+      background: radial-gradient(circle, rgba(232,133,106,0.12) 0%, rgba(232,133,106,0) 70%);
+      filter: blur(100px);
+    }
+    .pulse-blob-2 {
+      background: radial-gradient(circle, rgba(240,165,144,0.10) 0%, rgba(240,165,144,0) 70%);
+      filter: blur(100px);
+    }
+
+    /* ── Carousel ── */
+    .carousel-viewport {
+      position: relative;
+      width: 100%;
+      height: 440px;
+      overflow: hidden;
+      cursor: grab;
+      user-select: none;
+    }
+    .carousel-viewport:active { cursor: grabbing; }
+
+    .plan-card {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: clamp(260px, 76vw, 330px);
+      background: rgba(22, 20, 32, 0.95);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      border-radius: 24px;
+      padding: 32px 28px 28px;
+      will-change: transform, opacity;
+      transition: transform 0.45s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+                  opacity 0.45s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+                  box-shadow 0.3s ease,
+                  border-color 0.3s ease;
+    }
+    .plan-card.active-card {
+      border-color: rgba(232, 133, 106, 0.3);
+      box-shadow: 0 0 70px -15px rgba(232, 133, 106, 0.22),
+                  0 24px 60px -20px rgba(0, 0, 0, 0.85);
+      background: rgba(28, 24, 38, 0.98);
+    }
+    .plan-card.selected-card {
+      border-color: rgba(232, 133, 106, 0.55);
+      box-shadow: 0 0 90px -10px rgba(232, 133, 106, 0.35),
+                  0 24px 60px -20px rgba(0, 0, 0, 0.85);
+    }
+
+    .plan-badge {
+      display: inline-flex;
+      align-items: center;
+      background: rgba(232, 133, 106, 0.12);
+      color: #e8856a;
+      border: 1px solid rgba(232, 133, 106, 0.28);
+      padding: 4px 12px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-bottom: 22px;
+    }
+
+    .plan-duration {
+      font-family: 'Syne', sans-serif;
+      font-size: 38px;
+      font-weight: 800;
+      color: #e7e4f0;
+      line-height: 1.1;
+      margin-bottom: 6px;
+      letter-spacing: -0.02em;
+    }
+
+    .plan-speed {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: #76747f;
+      letter-spacing: 0.04em;
+      margin-bottom: 28px;
+    }
+
+    .plan-price-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: #484751;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+
+    .plan-price-amount {
+      font-family: 'Syne', sans-serif;
+      font-size: 46px;
+      font-weight: 800;
+      background: linear-gradient(135deg, #e8856a 0%, #f0a590 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+      line-height: 1;
+      margin-bottom: 28px;
+      letter-spacing: -0.02em;
+    }
+
+    .plan-price-amount .price-currency {
+      font-size: 20px;
+      font-weight: 700;
+      vertical-align: super;
+      margin-right: 2px;
+    }
+
+    .plan-select-btn {
+      width: 100%;
+      padding: 14px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, #e8856a 0%, #f0a590 100%);
+      color: #3d1a0f;
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 15px;
+      letter-spacing: 0.02em;
+      border: none;
+      cursor: pointer;
+      transition: box-shadow 0.2s ease, transform 0.15s ease;
+      box-shadow: 0 4px 22px rgba(232, 133, 106, 0.28);
+    }
+    .plan-select-btn:hover {
+      box-shadow: 0 6px 32px rgba(232, 133, 106, 0.48);
+      transform: translateY(-1px);
+    }
+    .plan-select-btn:active { transform: translateY(0); }
+
+    /* ── Arrow buttons ── */
+    .carousel-arrow {
+      width: 44px;
+      height: 44px;
       border-radius: 50%;
-      width: 28px; height: 28px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.09);
+      color: #acaab5;
+      font-size: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      flex-shrink: 0;
+      line-height: 1;
+    }
+    .carousel-arrow:hover:not(:disabled) {
+      background: rgba(232, 133, 106, 0.13);
+      border-color: rgba(232, 133, 106, 0.38);
+      color: #e8856a;
+    }
+    .carousel-arrow:disabled {
+      opacity: 0.25;
+      cursor: default;
+    }
+
+    /* ── Dots ── */
+    .carousel-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 3px;
+      background: rgba(255, 255, 255, 0.18);
+      border: none;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      padding: 0;
+    }
+    .carousel-dot.dot-active {
+      width: 24px;
+      background: #e8856a;
+    }
+
+    /* ── Payment panel ── */
+    .payment-panel {
+      background: #131318;
+      border: 1px solid rgba(72, 71, 81, 0.2);
+      border-radius: 20px;
+    }
+
+    .btn-gradient { background: linear-gradient(135deg, #e8856a, #f0a590); color: #3d1a0f; }
+    .text-gradient {
+      background: linear-gradient(135deg, #e8856a, #f0a590);
+      -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .hidden { display: none !important; }
+    .loading-spinner {
+      border: 2px solid rgba(232, 133, 106, 0.2);
+      border-top-color: #e8856a;
+      border-radius: 50%; width: 32px; height: 32px;
       animation: spin .8s linear infinite;
     }
-    .pulse-animation {
-      animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-    }
-    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
-    .gradient-bg { background: linear-gradient(145deg, #0f172a 0%, #1e293b 100%); }
+    @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
-<body class="gradient-bg min-h-screen flex flex-col items-center justify-center p-4">
-  <div class="w-full max-w-md">
+<body class="min-h-screen bg-surface-container-lowest text-on-surface relative overflow-x-hidden antialiased">
 
-    <!-- Brand header (above card) -->
-    <div class="text-center mb-5">
-      <div style="width:56px;height:56px;background:linear-gradient(135deg,#4f46e5 0%,#7c3aed 100%);border-radius:16px;display:flex;align-items:center;justify-content:center;margin:0 auto 10px;box-shadow:0 8px 20px rgba(79,70,229,.45);">
-        <i class="fas fa-wifi text-2xl text-white"></i>
+<div class="fixed inset-0 z-0 pointer-events-none overflow-hidden">
+  <div class="absolute top-[-10%] left-[-15%] w-[70vw] h-[70vw] rounded-full pulse-blob-1"></div>
+  <div class="absolute bottom-[-10%] right-[-15%] w-[60vw] h-[60vw] rounded-full pulse-blob-2"></div>
+</div>
+
+<main class="relative z-10 flex flex-col items-center justify-center min-h-screen py-10 px-5 w-full max-w-2xl mx-auto">
+
+  <!-- Hero Header -->
+  <header class="text-center w-full mb-10">
+    <h1 class="font-headline text-4xl md:text-6xl font-extrabold tracking-tighter mb-3 text-on-surface">
+      SmartWiFi<br/>
+      <span class="text-gradient">Network</span>
+    </h1>
+    <p class="text-on-surface-variant text-base md:text-lg font-medium">Fast. Secure. Pay once, browse freely.</p>
+  </header>
+
+  <!-- User Info Bar -->
+  <div id="userInfo" class="hidden w-full max-w-xl mb-6 flex items-center justify-between bg-white/5 rounded-xl px-5 py-3 border border-outline-variant/20">
+    <div class="flex items-center gap-2">
+      <span class="material-symbols-outlined text-primary text-sm" style="font-variation-settings:'FILL' 1">account_circle</span>
+      <div>
+        <p class="text-xs text-on-surface-variant">Welcome back</p>
+        <p class="text-sm font-semibold text-on-surface" id="userName"></p>
       </div>
-      <h1 class="text-2xl font-bold text-white" style="letter-spacing:-.02em;">SmartWiFi</h1>
-      <p class="text-sm mt-1" style="color:#94a3b8;">Fast &amp; Reliable Internet Access</p>
     </div>
-
-    <!-- Main Portal Card -->
-    <div id="portalCard" class="glass-effect rounded-2xl p-6 shadow-2xl">
-
-      <!-- Welcome / Login prompt -->
-      <div id="userInfo" class="hidden mb-5 flex items-center justify-between bg-white bg-opacity-10 rounded-xl px-4 py-3">
-        <div>
-          <p class="text-xs text-blue-200 mb-0.5">Welcome back</p>
-          <p class="text-white font-semibold text-sm" id="userName"></p>
-        </div>
-        <div class="flex gap-3">
-          <a href="/profile" class="text-xs text-blue-200 hover:text-white transition flex items-center gap-1">
-            <i class="fas fa-user-circle"></i> Profile
-          </a>
-          <button id="logoutBtn" class="text-xs text-blue-200 hover:text-red-300 transition">
-            <i class="fas fa-sign-out-alt"></i> Logout
-          </button>
-        </div>
-      </div>
-
-      <div id="loginRequired" class="hidden mb-5">
-        <div class="bg-amber-500 bg-opacity-15 border border-amber-400 border-opacity-30 rounded-xl p-4 text-center">
-          <i class="fas fa-lock text-amber-300 text-lg mb-2 block"></i>
-          <p class="text-sm text-amber-100 mb-3">Login to purchase internet packages</p>
-          <a href="/login" class="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold py-2 px-5 rounded-lg transition">
-            <i class="fas fa-sign-in-alt"></i> Login / Register
-          </a>
-        </div>
-      </div>
-
-      <!-- Section title -->
-      <p class="text-blue-100 text-sm font-medium mb-3 opacity-80">Available Packages</p>
-
-      <!-- Loading -->
-      <div id="loadingState" class="text-center py-8">
-        <div class="loading-spinner mx-auto mb-3"></div>
-        <p class="text-blue-100 text-sm">Loading packages...</p>
-      </div>
-
-      <!-- Error -->
-      <div id="errorState" class="hidden bg-red-500 bg-opacity-15 border border-red-400 border-opacity-30 rounded-xl p-4 mb-4">
-        <div class="flex items-center gap-3">
-          <i class="fas fa-exclamation-triangle text-red-300"></i>
-          <span id="errorMessage" class="text-red-100 text-sm"></span>
-        </div>
-      </div>
-
-      <!-- Packages -->
-      <div id="packagesList" class="hidden space-y-2 mb-4"></div>
-
-      <!-- Payment Form -->
-      <div id="paymentForm" class="hidden">
-        <div class="bg-white bg-opacity-10 rounded-xl p-4 mb-4">
-          <div class="flex justify-between text-sm mb-2">
-            <span class="text-blue-200">Package</span>
-            <span id="selectedPackageName" class="text-white font-semibold"></span>
-          </div>
-          <div class="flex justify-between text-sm mb-2">
-            <span class="text-blue-200">Duration</span>
-            <span id="selectedPackageDuration" class="text-white font-semibold"></span>
-          </div>
-          <div class="flex justify-between text-sm">
-            <span class="text-blue-200">Amount</span>
-            <span id="selectedPackagePrice" class="text-white font-bold text-base"></span>
-          </div>
-        </div>
-
-        <div class="mb-4">
-          <label class="block text-white text-sm font-medium mb-2">
-            <i class="fas fa-phone mr-1"></i> M-Pesa Phone Number
-          </label>
-          <input type="tel" id="phoneInput" placeholder="0712 345 678"
-            class="w-full px-4 py-3 rounded-xl bg-white bg-opacity-15 border border-white border-opacity-20 text-white placeholder-blue-300 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-opacity-50 text-sm">
-        </div>
-
-        <button id="payButton"
-          class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-xl transition flex items-center justify-center gap-2 text-sm shadow-lg">
-          <i class="fas fa-mobile-alt"></i> Pay with M-Pesa
-        </button>
-
-        <button id="backButton"
-          class="w-full mt-2 bg-white bg-opacity-10 hover:bg-opacity-20 text-white font-medium py-2.5 px-4 rounded-xl transition text-sm flex items-center justify-center gap-2">
-          <i class="fas fa-arrow-left"></i> Back
-        </button>
-      </div>
-
-      <!-- Payment Status -->
-      <div id="paymentStatus" class="hidden text-center">
-        <!-- Pending -->
-        <div id="paymentPending" class="hidden">
-          <div class="w-16 h-16 bg-amber-500 rounded-full flex items-center justify-center mx-auto mb-4 pulse-animation">
-            <i class="fas fa-clock text-2xl text-white"></i>
-          </div>
-          <h3 class="text-xl font-bold text-white mb-1">Awaiting Payment</h3>
-          <p class="text-blue-200 text-sm mb-4">Check your phone for the M-Pesa prompt</p>
-          <div class="bg-white bg-opacity-10 rounded-xl p-4 mb-4 text-sm text-left">
-            <div class="flex justify-between mb-1">
-              <span class="text-blue-200">Amount</span>
-              <span id="pendingAmount" class="text-white font-semibold"></span>
-            </div>
-            <div class="flex justify-between">
-              <span class="text-blue-200">Package</span>
-              <span id="pendingPackage" class="text-white font-semibold"></span>
-            </div>
-          </div>
-          <button id="checkStatusButton"
-            class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-5 rounded-xl transition text-sm">
-            <i class="fas fa-sync-alt mr-1"></i> Check Status
-          </button>
-        </div>
-
-        <!-- Success -->
-        <div id="paymentSuccess" class="hidden">
-          <div class="w-16 h-16 bg-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
-            <i class="fas fa-check text-2xl text-white"></i>
-          </div>
-          <h3 class="text-xl font-bold text-white mb-1">You're Connected!</h3>
-          <p class="text-blue-200 text-sm mb-4">Payment successful</p>
-          <div class="bg-white bg-opacity-10 rounded-xl p-4 mb-4 text-sm">
-            <div class="flex justify-between mb-1">
-              <span class="text-blue-200">Expires</span>
-              <span id="sessionExpiry" class="text-white font-semibold"></span>
-            </div>
-            <div class="flex justify-between">
-              <span class="text-blue-200">Remaining</span>
-              <span id="timeRemaining" class="text-white font-semibold"></span>
-            </div>
-          </div>
-          <button id="newSessionButton"
-            class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-5 rounded-xl transition text-sm">
-            <i class="fas fa-plus mr-1"></i> Buy More Time
-          </button>
-        </div>
-
-        <!-- Failed -->
-        <div id="paymentFailed" class="hidden">
-          <div class="w-16 h-16 bg-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
-            <i class="fas fa-times text-2xl text-white"></i>
-          </div>
-          <h3 class="text-xl font-bold text-white mb-1">Payment Failed</h3>
-          <p class="text-blue-200 text-sm mb-4">Please try again or contact support</p>
-          <button id="retryPaymentButton"
-            class="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-5 rounded-xl transition text-sm">
-            <i class="fas fa-redo mr-1"></i> Try Again
-          </button>
-        </div>
-      </div>
-
-    </div><!-- /card -->
-
-    <!-- Footer -->
-    <div class="flex justify-between items-center mt-4 px-1">
-      <button id="termsButton" class="text-xs" style="color:#475569; background:none; border:none; cursor:pointer;">
-        Terms &amp; Conditions
-      </button>
-      <span class="text-xs" style="color:#334155;">SmartWiFi &copy; 2025</span>
-    </div>
-
-  </div><!-- /max-w -->
-
-  <!-- Terms Modal -->
-  <div id="termsModal" class="hidden fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50">
-    <div class="bg-white rounded-2xl max-w-md w-full max-h-96 overflow-y-auto shadow-2xl">
-      <div class="p-6">
-        <div class="flex justify-between items-center mb-4">
-          <h3 class="text-lg font-bold text-gray-900">Terms &amp; Conditions</h3>
-          <button id="closeTermsButton" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition">
-            <i class="fas fa-times"></i>
-          </button>
-        </div>
-        <div class="text-sm text-gray-600 space-y-3">
-          <p><strong>1. Service Usage:</strong> This Wi-Fi service is provided for legitimate internet access only. Illegal activities are strictly prohibited.</p>
-          <p><strong>2. Payment:</strong> All payments are processed through M-Pesa. Refunds are not available once internet access is granted.</p>
-          <p><strong>3. Session Duration:</strong> Sessions automatically expire at the end of the purchased period.</p>
-          <p><strong>4. Fair Usage:</strong> We reserve the right to limit bandwidth for excessive usage affecting other users.</p>
-          <p><strong>5. Privacy:</strong> We do not monitor browsing activity. Connection times and data usage may be logged for billing.</p>
-          <p><strong>6. Support:</strong> For technical issues, please contact our support team.</p>
-          <p><strong>7. Liability:</strong> We are not responsible for any damages incurred while using this service.</p>
-        </div>
-      </div>
+    <div class="flex gap-4 items-center">
+      <a href="/profile" class="text-xs text-on-surface-variant hover:text-primary transition-colors flex items-center gap-1">
+        <span class="material-symbols-outlined text-xs">person</span> Profile
+      </a>
+      <button id="logoutBtn" class="text-xs text-on-surface-variant hover:text-error transition-colors">Logout</button>
     </div>
   </div>
 
-  <script src="app.js"></script>
+  <!-- Login Required -->
+  <div id="loginRequired" class="hidden w-full max-w-sm mb-6">
+    <div class="payment-panel p-6 text-center">
+      <span class="material-symbols-outlined text-primary text-3xl mb-3 block" style="font-variation-settings:'FILL' 1">lock</span>
+      <p class="text-sm text-on-surface-variant mb-4">Sign in to purchase internet packages</p>
+      <a href="/login" class="inline-flex items-center gap-2 btn-gradient text-sm font-bold py-2.5 px-6 rounded-xl shadow-[0_0_16px_rgba(232,133,106,0.2)]">
+        <span class="material-symbols-outlined text-sm">login</span> Login / Register
+      </a>
+    </div>
+  </div>
+
+  <!-- Loading -->
+  <div id="loadingState" class="text-center py-16">
+    <div class="loading-spinner mx-auto mb-3"></div>
+    <p class="text-on-surface-variant text-sm font-mono">Loading packages...</p>
+  </div>
+
+  <!-- Error -->
+  <div id="errorState" class="hidden w-full max-w-md bg-error/10 border border-error/25 rounded-xl p-4 mb-6">
+    <div class="flex items-center gap-3">
+      <span class="material-symbols-outlined text-error text-lg">wifi_off</span>
+      <span id="errorMessage" class="text-on-surface text-sm"></span>
+    </div>
+  </div>
+
+  <!-- ── Carousel Section ── -->
+  <section id="carouselSection" class="hidden w-full">
+    <h2 class="font-headline text-2xl font-bold mb-6 text-on-surface text-center tracking-tight">Select Your Plan</h2>
+
+    <!-- Viewport -->
+    <div id="carouselViewport" class="carousel-viewport">
+      <div id="carouselTrack"></div>
+    </div>
+
+    <!-- Controls -->
+    <div class="flex items-center justify-center gap-4 mt-5">
+      <button id="prevCard" class="carousel-arrow" aria-label="Previous plan">&#8249;</button>
+      <div id="carouselDots" class="flex items-center gap-2"></div>
+      <button id="nextCard" class="carousel-arrow" aria-label="Next plan">&#8250;</button>
+    </div>
+
+    <!-- ── Payment Panel (below carousel) ── -->
+    <div id="paymentForm" class="hidden w-full max-w-md mx-auto mt-8 payment-panel p-7 relative overflow-hidden">
+      <div class="absolute top-0 right-0 w-40 h-40 bg-primary/5 rounded-full blur-3xl pointer-events-none"></div>
+
+      <h3 class="font-headline text-xl font-bold text-on-surface mb-5 flex items-center gap-2">
+        <span class="material-symbols-outlined text-primary">payments</span> Complete Payment
+      </h3>
+
+      <!-- Plan summary -->
+      <div class="bg-surface-container-high rounded-xl p-4 mb-5 border border-outline-variant/10">
+        <div class="flex justify-between text-sm mb-2">
+          <span class="text-on-surface-variant">Package</span>
+          <span id="selectedPackageName" class="text-on-surface font-semibold font-mono"></span>
+        </div>
+        <div class="flex justify-between text-sm mb-2">
+          <span class="text-on-surface-variant">Duration</span>
+          <span id="selectedPackageDuration" class="text-on-surface font-semibold font-mono"></span>
+        </div>
+        <div class="flex justify-between text-sm">
+          <span class="text-on-surface-variant">Amount</span>
+          <span id="selectedPackagePrice" class="text-gradient font-bold font-mono text-base"></span>
+        </div>
+      </div>
+
+      <!-- Phone input -->
+      <div class="mb-5">
+        <label class="block text-sm font-medium text-on-surface-variant mb-2">M-Pesa Phone Number</label>
+        <div class="flex items-center bg-surface-container-highest rounded-xl border border-outline-variant/30 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary transition-all overflow-hidden">
+          <span class="px-4 py-3 font-mono text-sm text-on-surface-variant bg-surface-bright border-r border-outline-variant/30">+254</span>
+          <input type="tel" id="phoneInput" placeholder="712 345 678"
+            class="w-full bg-transparent border-none text-on-surface font-mono py-3 px-4 focus:ring-0 text-sm placeholder:text-outline-variant/60"/>
+        </div>
+      </div>
+
+      <button id="payButton"
+        class="w-full py-4 rounded-xl btn-gradient font-bold text-lg flex items-center justify-center gap-2 shadow-[0_0_22px_rgba(232,133,106,0.22)] hover:shadow-[0_0_32px_rgba(232,133,106,0.4)] transition-all">
+        <span class="material-symbols-outlined text-base" style="font-variation-settings:'FILL' 1">smartphone</span>
+        Pay with M-Pesa
+      </button>
+      <button id="backButton"
+        class="w-full mt-3 py-2.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-on-surface-variant font-medium transition-colors text-sm flex items-center justify-center gap-2">
+        <span class="material-symbols-outlined text-sm">arrow_back</span> Back
+      </button>
+    </div>
+  </section>
+
+  <!-- Payment Status -->
+  <div id="paymentStatus" class="hidden w-full max-w-md text-center">
+
+    <div id="paymentPending" class="hidden">
+      <div class="w-16 h-16 rounded-full border-2 border-primary border-t-transparent animate-spin mx-auto mb-4"></div>
+      <h3 class="font-headline text-xl font-bold text-on-surface mb-1">Awaiting Payment</h3>
+      <p class="text-on-surface-variant text-sm mb-4">Check your phone for the M-Pesa prompt</p>
+      <div class="payment-panel rounded-xl p-4 mb-5 text-sm text-left border border-outline-variant/15">
+        <div class="flex justify-between mb-2">
+          <span class="text-on-surface-variant">Amount</span>
+          <span id="pendingAmount" class="text-on-surface font-mono font-semibold"></span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-on-surface-variant">Package</span>
+          <span id="pendingPackage" class="text-on-surface font-mono font-semibold"></span>
+        </div>
+      </div>
+      <button id="checkStatusButton"
+        class="btn-gradient font-semibold py-2.5 px-6 rounded-xl text-sm shadow-[0_0_16px_rgba(232,133,106,0.2)] inline-flex items-center gap-2">
+        <span class="material-symbols-outlined text-sm">refresh</span> Check Status
+      </button>
+    </div>
+
+    <div id="paymentSuccess" class="hidden">
+      <div class="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center mx-auto mb-4 shadow-[0_0_24px_rgba(232,133,106,0.3)]">
+        <span class="material-symbols-outlined text-primary text-3xl" style="font-variation-settings:'FILL' 1">check_circle</span>
+      </div>
+      <h3 class="font-headline text-xl font-bold text-on-surface mb-1">You're Connected!</h3>
+      <p class="text-on-surface-variant text-sm mb-4">Payment successful</p>
+      <div class="payment-panel rounded-xl p-4 mb-5 text-sm border border-outline-variant/15">
+        <div class="flex justify-between mb-2">
+          <span class="text-on-surface-variant">Expires</span>
+          <span id="sessionExpiry" class="text-on-surface font-mono font-semibold"></span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-on-surface-variant">Remaining</span>
+          <span id="timeRemaining" class="text-gradient font-mono font-semibold"></span>
+        </div>
+      </div>
+      <button id="newSessionButton"
+        class="btn-gradient font-semibold py-2.5 px-6 rounded-xl text-sm shadow-[0_0_16px_rgba(232,133,106,0.2)] inline-flex items-center gap-2">
+        <span class="material-symbols-outlined text-sm">add</span> Buy More Time
+      </button>
+    </div>
+
+    <div id="paymentFailed" class="hidden">
+      <div class="w-16 h-16 rounded-full bg-error/20 flex items-center justify-center mx-auto mb-4">
+        <span class="material-symbols-outlined text-error text-3xl" style="font-variation-settings:'FILL' 1">cancel</span>
+      </div>
+      <h3 class="font-headline text-xl font-bold text-on-surface mb-1">Payment Failed</h3>
+      <p class="text-on-surface-variant text-sm mb-4">Please try again or contact support</p>
+      <button id="retryPaymentButton"
+        class="btn-gradient font-semibold py-2.5 px-6 rounded-xl text-sm shadow-[0_0_16px_rgba(232,133,106,0.2)] inline-flex items-center gap-2">
+        <span class="material-symbols-outlined text-sm">refresh</span> Try Again
+      </button>
+    </div>
+
+  </div>
+
+  <div class="flex justify-between items-center w-full max-w-xl mt-8 px-2">
+    <button id="termsButton" class="text-xs text-on-surface-variant hover:text-primary transition-colors">Terms &amp; Conditions</button>
+    <span class="text-xs text-outline">SmartWiFi &copy; 2025</span>
+  </div>
+
+</main>
+
+<!-- Terms Modal -->
+<div id="termsModal" class="hidden fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+  <div class="payment-panel rounded-2xl w-full max-w-md max-h-[80vh] overflow-y-auto border border-outline-variant/20">
+    <div class="p-6">
+      <div class="flex justify-between items-center mb-5">
+        <h3 class="font-headline text-lg font-bold text-on-surface">Terms &amp; Conditions</h3>
+        <button id="closeTermsButton" class="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 text-on-surface-variant hover:text-on-surface transition-colors">
+          <span class="material-symbols-outlined text-sm">close</span>
+        </button>
+      </div>
+      <div class="text-sm text-on-surface-variant space-y-3">
+        <p><span class="text-primary font-semibold">1. Service Usage:</span> This Wi-Fi service is for legitimate internet access only. Illegal activities are strictly prohibited.</p>
+        <p><span class="text-primary font-semibold">2. Payment:</span> Payments are processed via M-Pesa. Refunds are not available once internet access is granted.</p>
+        <p><span class="text-primary font-semibold">3. Sessions:</span> Sessions automatically expire at the end of the purchased period.</p>
+        <p><span class="text-primary font-semibold">4. Fair Usage:</span> We reserve the right to limit bandwidth for excessive usage affecting other users.</p>
+        <p><span class="text-primary font-semibold">5. Privacy:</span> Connection times and data usage may be logged for billing purposes.</p>
+        <p><span class="text-primary font-semibold">6. Liability:</span> We are not responsible for damages incurred while using this service.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
 </body>
 </html>

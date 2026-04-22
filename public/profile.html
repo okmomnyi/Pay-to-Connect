@@ -1,79 +1,192 @@
 <!DOCTYPE html>
-<html lang="en">
+<html class="dark" lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SmartWiFi — My Profile</title>
-  <link rel="stylesheet" href="portal.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <!-- Tailwind needed for profile.js dynamic classes -->
-  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;500;700&family=JetBrains+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+  <script>
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "primary": "#C2777A", "secondary": "#E8A598",
+            "on-primary": "#4a1c1f", "on-surface": "#e7e4f0",
+            "on-surface-variant": "#acaab5",
+            "surface-container-lowest": "#000000",
+            "surface-container-low": "#13121c",
+            "surface-container": "#191923",
+            "surface-container-high": "#1f1f2a",
+            "surface-container-highest": "#252531",
+            "surface-bright": "#2b2b38",
+            "outline-variant": "#484751", "outline": "#76747f",
+            "error": "#ff716c"
+          },
+          fontFamily: {
+            "headline": ["Syne", "sans-serif"],
+            "body": ["DM Sans", "sans-serif"],
+            "mono": ["JetBrains Mono", "monospace"]
+          },
+          borderRadius: { "xl": "0.75rem", "2xl": "1.5rem", "full": "9999px" }
+        }
+      }
+    }
+  </script>
+  <style>
+    body { font-family: 'DM Sans', sans-serif; background-color: #000000; color: #e7e4f0; }
+    h1, h2, h3, h4 { font-family: 'Syne', sans-serif; }
+    .liquid-glass {
+      background: rgba(255,255,255,0.03);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(72,71,81,0.25);
+    }
+    .btn-gradient { background: linear-gradient(135deg, #C2777A, #E8A598); color: #4a1c1f; }
+    .text-gradient {
+      background: linear-gradient(135deg, #C2777A, #E8A598);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .hidden { display: none !important; }
+    .pulse-blob { position: fixed; border-radius: 50%; filter: blur(80px); pointer-events: none; z-index: 0; }
+    .glass-input {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(72,71,81,0.3);
+      color: #e7e4f0;
+      border-radius: 0.75rem;
+      padding: 0.65rem 1rem;
+      width: 100%;
+      transition: all 0.2s;
+    }
+    .glass-input:focus {
+      outline: none;
+      border-color: #C2777A;
+      box-shadow: 0 0 0 2px rgba(194,119,122,0.2);
+    }
+    .glass-input::placeholder { color: #76747f; }
+    /* Accordion */
+    .accordion-body { display: none; overflow: hidden; }
+    .accordion-body.active { display: block; }
+    .accordion-chevron { transition: transform 0.25s ease; font-size: 1.1rem; }
+    .accordion-chevron.active { transform: rotate(180deg); }
+    /* Badge compatibility (profile.js sets these classes) */
+    .badge-green { background: rgba(22,101,52,0.3); color: #86efac; border: 1px solid rgba(22,101,52,0.4); }
+    .badge-amber { background: rgba(120,53,15,0.3); color: #fcd34d; border: 1px solid rgba(120,53,15,0.4); }
+    .badge-gray  { background: rgba(72,71,81,0.4);  color: #acaab5; border: 1px solid rgba(72,71,81,0.5); }
+    .badge-red   { background: rgba(127,29,29,0.3); color: #fca5a5; border: 1px solid rgba(127,29,29,0.4); }
+    .badge {
+      display: inline-flex; align-items: center;
+      padding: 0.2rem 0.65rem;
+      border-radius: 9999px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+    }
+    /* Toast (alert-container) */
+    #alert-container { position: fixed; top: 1.25rem; right: 1.25rem; z-index: 9999; display: flex; flex-direction: column; gap: 0.5rem; }
+    .toast-alert {
+      padding: 0.75rem 1rem;
+      border-radius: 0.75rem;
+      font-size: 0.875rem;
+      font-weight: 500;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+      animation: slideIn 0.2s ease;
+    }
+    @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+  </style>
 </head>
-<body>
-<div class="page-wrapper" style="justify-content:flex-start; padding-top:32px; padding-bottom:40px;">
-  <div class="page-container page-container--wide">
+<body class="min-h-screen bg-surface-container-lowest text-on-surface relative antialiased">
 
-    <!-- Nav -->
-    <div class="portal-nav">
-      <a href="/portal" class="nav-link">
-        <i class="fas fa-arrow-left"></i> Back to Portal
-      </a>
-      <button onclick="logout()" class="nav-link danger">
-        <i class="fas fa-sign-out-alt"></i> Logout
-      </button>
-    </div>
+<div class="fixed inset-0 z-0 pointer-events-none overflow-hidden">
+  <div class="pulse-blob w-[60vw] h-[60vw] top-[-10%] left-[-10%]" style="background:radial-gradient(circle,rgba(194,119,122,0.12) 0%,rgba(194,119,122,0) 70%)"></div>
+  <div class="pulse-blob w-[50vw] h-[50vw] bottom-[-10%] right-[-10%]" style="background:radial-gradient(circle,rgba(232,165,152,0.10) 0%,rgba(232,165,152,0) 70%)"></div>
+</div>
 
-    <!-- Profile Card -->
-    <div class="card" style="margin-bottom:16px; padding:0; overflow:hidden;">
-      <div class="profile-header">
-        <div id="avatar" class="profile-avatar">👤</div>
-        <div id="profile-name" class="profile-name">Loading...</div>
-        <div id="profile-email" class="profile-email">—</div>
-        <div style="display:flex; justify-content:center; gap:8px; margin-top:12px;">
-          <span id="profile-status" class="badge badge-gray">Loading...</span>
-          <span id="security-status" class="badge badge-amber">Loading...</span>
+<div class="relative z-10 min-h-screen flex flex-col">
+
+  <!-- Top Nav -->
+  <nav class="flex items-center justify-between px-5 py-4 border-b border-outline-variant/15">
+    <a href="/portal" class="inline-flex items-center gap-2 text-sm text-on-surface-variant hover:text-primary transition-colors">
+      <span class="material-symbols-outlined text-sm">arrow_back</span> Back to Portal
+    </a>
+    <button onclick="logout()" class="inline-flex items-center gap-2 text-sm text-on-surface-variant hover:text-error transition-colors">
+      <span class="material-symbols-outlined text-sm">logout</span> Logout
+    </button>
+  </nav>
+
+  <!-- Content -->
+  <main class="flex-1 px-4 py-6 max-w-2xl mx-auto w-full">
+
+    <!-- Profile Identity Card -->
+    <div class="liquid-glass rounded-2xl overflow-hidden mb-4">
+      <!-- Header gradient band -->
+      <div class="h-20 w-full" style="background:linear-gradient(135deg,rgba(194,119,122,0.25),rgba(232,165,152,0.15))"></div>
+
+      <div class="px-6 pb-6 -mt-10">
+        <!-- Avatar -->
+        <div id="avatar" class="w-16 h-16 rounded-full btn-gradient flex items-center justify-center font-headline font-bold text-xl text-on-primary shadow-[0_4px_16px_rgba(194,119,122,0.4)] mb-3 border-2 border-surface-container-lowest">
+          👤
+        </div>
+
+        <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+          <div>
+            <h2 id="profile-name" class="font-headline text-2xl font-bold text-on-surface">Loading...</h2>
+            <p id="profile-email" class="text-sm text-on-surface-variant mt-0.5">—</p>
+            <div class="flex items-center gap-2 mt-2 flex-wrap">
+              <span id="profile-status" class="badge badge-gray">Loading...</span>
+              <span id="security-status" class="badge badge-amber">Loading...</span>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div style="padding:20px 28px;">
-        <div class="data-row">
-          <span class="data-label"><i class="fas fa-user" style="width:18px;color:var(--primary);"></i> Username</span>
-          <span class="data-value" id="username">—</span>
+      <div class="border-t border-outline-variant/15 divide-y divide-outline-variant/10">
+        <div class="flex items-center justify-between px-6 py-3.5">
+          <span class="flex items-center gap-2 text-sm text-on-surface-variant">
+            <span class="material-symbols-outlined text-primary text-sm">alternate_email</span> Username
+          </span>
+          <span id="username" class="text-sm font-mono text-on-surface">—</span>
         </div>
-        <div class="data-row">
-          <span class="data-label"><i class="fas fa-phone" style="width:18px;color:var(--primary);"></i> Phone</span>
-          <span class="data-value" id="phone">—</span>
+        <div class="flex items-center justify-between px-6 py-3.5">
+          <span class="flex items-center gap-2 text-sm text-on-surface-variant">
+            <span class="material-symbols-outlined text-primary text-sm">phone</span> Phone
+          </span>
+          <span id="phone" class="text-sm font-mono text-on-surface">—</span>
         </div>
-        <div class="data-row">
-          <span class="data-label"><i class="fas fa-calendar-alt" style="width:18px;color:var(--primary);"></i> Member Since</span>
-          <span class="data-value" id="member-since">—</span>
+        <div class="flex items-center justify-between px-6 py-3.5">
+          <span class="flex items-center gap-2 text-sm text-on-surface-variant">
+            <span class="material-symbols-outlined text-primary text-sm">calendar_today</span> Member Since
+          </span>
+          <span id="member-since" class="text-sm font-mono text-on-surface">—</span>
         </div>
-        <div class="data-row">
-          <span class="data-label"><i class="fas fa-clock" style="width:18px;color:var(--primary);"></i> Last Login</span>
-          <span class="data-value" id="last-login">—</span>
+        <div class="flex items-center justify-between px-6 py-3.5">
+          <span class="flex items-center gap-2 text-sm text-on-surface-variant">
+            <span class="material-symbols-outlined text-primary text-sm">schedule</span> Last Login
+          </span>
+          <span id="last-login" class="text-sm font-mono text-on-surface">—</span>
         </div>
       </div>
     </div>
 
     <!-- Security Questions Accordion -->
-    <div class="accordion" style="margin-bottom:12px;">
-      <button class="accordion-header" onclick="toggleAccordion('security-section')">
-        <div class="accordion-title">
-          <i class="fas fa-shield-alt"></i>
-          Security Questions
-          <span id="security-badge-header" class="badge badge-amber" style="font-size:.65rem;">Not Set</span>
+    <div class="liquid-glass rounded-2xl mb-3 overflow-hidden">
+      <button class="w-full flex items-center justify-between px-6 py-4 hover:bg-white/5 transition-colors" onclick="toggleAccordion('security-section')">
+        <div class="flex items-center gap-3">
+          <span class="material-symbols-outlined text-primary text-sm" style="font-variation-settings:'FILL' 1">shield</span>
+          <span class="font-semibold text-on-surface text-sm">Security Questions</span>
+          <span id="security-badge-header" class="badge badge-amber">Not Set</span>
         </div>
-        <i id="security-icon" class="fas fa-chevron-down accordion-chevron"></i>
+        <span id="security-icon" class="material-symbols-outlined accordion-chevron text-on-surface-variant">expand_more</span>
       </button>
-      <div id="security-section" class="accordion-body">
-        <div class="accordion-inner">
-          <p style="font-size:.875rem; color:var(--text-2); margin-bottom:16px;">
-            Set 3 security questions to protect and recover your account.
-          </p>
-          <form id="security-form">
-            <div id="security-questions-container" style="display:flex; flex-direction:column; gap:12px;"></div>
-            <button type="submit" class="btn btn-primary mt-md">
-              <i class="fas fa-save"></i> Save Security Questions
+      <div id="security-section" class="accordion-body border-t border-outline-variant/15">
+        <div class="px-6 py-4">
+          <p class="text-sm text-on-surface-variant mb-4">Set 3 security questions to protect and recover your account.</p>
+          <form id="security-form" class="flex flex-col gap-3">
+            <div id="security-questions-container" class="flex flex-col gap-4"></div>
+            <button type="submit" class="w-full py-2.5 rounded-xl btn-gradient font-bold text-sm flex items-center justify-center gap-2 shadow-[0_0_16px_rgba(194,119,122,0.15)] mt-1">
+              <span class="material-symbols-outlined text-sm">save</span> Save Security Questions
             </button>
           </form>
         </div>
@@ -81,31 +194,31 @@
     </div>
 
     <!-- Change Password Accordion -->
-    <div class="accordion" style="margin-bottom:12px;">
-      <button class="accordion-header" onclick="toggleAccordion('password-section')">
-        <div class="accordion-title">
-          <i class="fas fa-key"></i>
-          Change Password
+    <div class="liquid-glass rounded-2xl mb-3 overflow-hidden">
+      <button class="w-full flex items-center justify-between px-6 py-4 hover:bg-white/5 transition-colors" onclick="toggleAccordion('password-section')">
+        <div class="flex items-center gap-3">
+          <span class="material-symbols-outlined text-primary text-sm" style="font-variation-settings:'FILL' 1">key</span>
+          <span class="font-semibold text-on-surface text-sm">Change Password</span>
         </div>
-        <i id="password-icon" class="fas fa-chevron-down accordion-chevron"></i>
+        <span id="password-icon" class="material-symbols-outlined accordion-chevron text-on-surface-variant">expand_more</span>
       </button>
-      <div id="password-section" class="accordion-body">
-        <div class="accordion-inner">
-          <form id="password-form" style="display:flex; flex-direction:column; gap:14px;">
-            <div class="form-group" style="margin:0;">
-              <label class="form-label" for="current-password">Current Password</label>
-              <input type="password" id="current-password" class="form-input" required>
+      <div id="password-section" class="accordion-body border-t border-outline-variant/15">
+        <div class="px-6 py-4">
+          <form id="password-form" class="flex flex-col gap-4">
+            <div>
+              <label class="block text-xs font-semibold text-on-surface-variant uppercase tracking-wider mb-1.5" for="current-password">Current Password</label>
+              <input type="password" id="current-password" class="glass-input" required/>
             </div>
-            <div class="form-group" style="margin:0;">
-              <label class="form-label" for="new-password">New Password</label>
-              <input type="password" id="new-password" class="form-input" required minlength="8">
+            <div>
+              <label class="block text-xs font-semibold text-on-surface-variant uppercase tracking-wider mb-1.5" for="new-password">New Password</label>
+              <input type="password" id="new-password" class="glass-input" required minlength="8"/>
             </div>
-            <div class="form-group" style="margin:0;">
-              <label class="form-label" for="confirm-password">Confirm New Password</label>
-              <input type="password" id="confirm-password" class="form-input" required minlength="8">
+            <div>
+              <label class="block text-xs font-semibold text-on-surface-variant uppercase tracking-wider mb-1.5" for="confirm-password">Confirm New Password</label>
+              <input type="password" id="confirm-password" class="glass-input" required minlength="8"/>
             </div>
-            <button type="submit" class="btn btn-primary">
-              <i class="fas fa-lock"></i> Update Password
+            <button type="submit" class="w-full py-2.5 rounded-xl btn-gradient font-bold text-sm flex items-center justify-center gap-2 shadow-[0_0_16px_rgba(194,119,122,0.15)]">
+              <span class="material-symbols-outlined text-sm" style="font-variation-settings:'FILL' 1">lock</span> Update Password
             </button>
           </form>
         </div>
@@ -113,34 +226,32 @@
     </div>
 
     <!-- Purchase History Accordion -->
-    <div class="accordion" style="margin-bottom:24px;">
-      <button class="accordion-header" onclick="toggleAccordion('history-section')">
-        <div class="accordion-title">
-          <i class="fas fa-receipt"></i>
-          Purchase History
+    <div class="liquid-glass rounded-2xl mb-6 overflow-hidden">
+      <button class="w-full flex items-center justify-between px-6 py-4 hover:bg-white/5 transition-colors" onclick="toggleAccordion('history-section')">
+        <div class="flex items-center gap-3">
+          <span class="material-symbols-outlined text-primary text-sm" style="font-variation-settings:'FILL' 1">receipt_long</span>
+          <span class="font-semibold text-on-surface text-sm">Purchase History</span>
         </div>
-        <i id="history-icon" class="fas fa-chevron-down accordion-chevron"></i>
+        <span id="history-icon" class="material-symbols-outlined accordion-chevron text-on-surface-variant">expand_more</span>
       </button>
-      <div id="history-section" class="accordion-body">
-        <div id="purchase-history" class="accordion-inner">
-          <div style="text-align:center; color:var(--text-3); padding:16px 0; font-size:.9rem;">
-            Loading history...
-          </div>
+      <div id="history-section" class="accordion-body border-t border-outline-variant/15">
+        <div id="purchase-history" class="px-6 py-4">
+          <p class="text-sm text-on-surface-variant text-center py-4">Loading history...</p>
         </div>
       </div>
     </div>
 
-    <!-- Danger zone -->
-    <div class="text-center">
-      <button onclick="logoutAllSessions()" class="nav-link danger" style="margin:auto;">
-        <i class="fas fa-power-off"></i> Logout from all devices
+    <!-- Danger Zone -->
+    <div class="text-center pb-8">
+      <button onclick="logoutAllSessions()" class="inline-flex items-center gap-2 text-sm text-error/70 hover:text-error transition-colors">
+        <span class="material-symbols-outlined text-sm">power_settings_new</span> Logout from all devices
       </button>
     </div>
 
-  </div>
+  </main>
 </div>
 
-<!-- Alert container (toast) -->
+<!-- Alert container (profile.js appends toasts here) -->
 <div id="alert-container"></div>
 
 <script>
@@ -148,7 +259,7 @@ function toggleAccordion(id) {
   const content = document.getElementById(id);
   const icon = document.getElementById(id.replace('section', 'icon'));
   content.classList.toggle('active');
-  icon.classList.toggle('active');
+  if (icon) icon.classList.toggle('active');
 }
 </script>
 <script src="profile.js"></script>
