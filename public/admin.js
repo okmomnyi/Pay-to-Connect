@@ -3,6 +3,11 @@ const API_BASE = '/api/admin';
 let currentAdmin = null;
 let dashboardInterval = null;
 
+// Router health monitoring state
+let routerPreviousState = {}; // { [routerId]: { online: bool, name: string } }
+let alertHistory = [];        // last 20 alerts
+let unreadAlertCount = 0;
+
 // =====================================================
 // AUTHENTICATION
 // =====================================================
@@ -61,7 +66,12 @@ async function logout() {
 
     if (dashboardInterval) {
         clearInterval(dashboardInterval);
+        dashboardInterval = null;
     }
+
+    routerPreviousState = {};
+    alertHistory = [];
+    unreadAlertCount = 0;
 
     document.getElementById('admin-panel').classList.add('hidden');
     document.getElementById('login-page').classList.remove('hidden');
@@ -97,6 +107,16 @@ window.addEventListener('DOMContentLoaded', async () => {
     } catch (error) {
         localStorage.removeItem('admin_user');
     }
+
+    // Close notification panel on outside click
+    document.addEventListener('click', (e) => {
+        const panel = document.getElementById('notification-panel');
+        const bellBtn = e.target.closest('button[onclick="toggleNotificationPanel()"]');
+        if (!panel || panel.classList.contains('hidden') || bellBtn) return;
+        if (!panel.contains(e.target)) {
+            panel.classList.add('hidden');
+        }
+    });
 });
 
 // =====================================================
@@ -183,70 +203,235 @@ function showSection(sectionName) {
 }
 
 // =====================================================
-// DASHBOARD
+// DASHBOARD — Network Operations
 // =====================================================
 
 async function loadDashboard() {
-    try {
-        const response = await apiCall('/dashboard/stats');
+    const [statsResult, routersResult, sessionsResult] = await Promise.allSettled([
+        apiCall('/dashboard/stats'),
+        apiCall('/routers'),
+        apiCall('/sessions')
+    ]);
 
-        if (response.success) {
-            const stats = response.stats;
+    const sessions = sessionsResult.status === 'fulfilled' && sessionsResult.value.success
+        ? sessionsResult.value.sessions || []
+        : [];
+    const routers = routersResult.status === 'fulfilled' && routersResult.value.success
+        ? routersResult.value.routers || []
+        : [];
 
-            document.getElementById('stat-total-users').textContent = stats.users.total;
-            document.getElementById('stat-active-users').textContent = stats.users.active;
-            document.getElementById('stat-revenue-month').textContent = `KES ${stats.revenue.month.toLocaleString()}`;
-            document.getElementById('stat-routers-online').textContent = stats.routers.online;
-
-            loadRecentActivity();
-        }
-    } catch (error) {
-        showToast('Failed to load dashboard stats', 'error');
-    }
+    if (statsResult.status === 'fulfilled') _updateKpiCards(statsResult.value, sessions);
+    _updateRouterHealth(routers);
+    _updateActiveSessions(sessions);
 }
 
-async function loadRecentActivity() {
-    try {
-        const response = await apiCall('/dashboard/activity?limit=10');
+function _updateKpiCards(response, sessions) {
+    if (!response.success) return;
+    const s = response.stats;
 
-        if (response.success) {
-            const container = document.getElementById('recent-activity');
+    const online = s.routers?.online ?? '—';
+    const total  = s.routers?.total  ?? null;
+    const el = document.getElementById('stat-routers-online');
+    el.textContent = online;
+    el.style.color = (typeof online === 'number' && total && online < total) ? '#f87171' : '#4ade80';
+    document.getElementById('stat-routers-total').textContent = total != null ? `of ${total} total` : '';
 
-            if (response.activities.length === 0) {
-                container.innerHTML = '<p class="text-gray-500">No recent activity</p>';
-                return;
+    const activeSessions = sessions.filter(s => s.active).length;
+    document.getElementById('stat-active-sessions').textContent =
+        activeSessions || s.users?.active || '0';
+
+    const todayRev = s.revenue?.today;
+    document.getElementById('stat-revenue-today').textContent =
+        todayRev != null ? `KES ${Number(todayRev).toLocaleString()}` : 'KES —';
+    document.getElementById('stat-revenue-month').textContent =
+        `Month: KES ${Number(s.revenue?.month || 0).toLocaleString()}`;
+
+    const pkgToday = s.packages?.today ?? s.transactions?.today ?? null;
+    document.getElementById('stat-packages-today').textContent = pkgToday != null ? pkgToday : '—';
+}
+
+function _updateRouterHealth(routers) {
+    const tbody  = document.getElementById('router-health-tbody');
+    const banner = document.getElementById('router-alert-banner');
+    const bannerText = document.getElementById('router-alert-text');
+    const updatedEl  = document.getElementById('router-health-updated');
+
+    updatedEl.textContent = `Updated ${new Date().toLocaleTimeString()}`;
+
+    // Detect state changes — emit toast + alert only after the first poll
+    const hadPreviousState = Object.keys(routerPreviousState).length > 0;
+    const offlineNames = [];
+
+    routers.forEach(router => {
+        const isOnline = router.connection_status === 'online';
+        if (hadPreviousState) {
+            const prev = routerPreviousState[router.id];
+            if (prev !== undefined) {
+                if (prev.online && !isOnline) {
+                    const msg = `${router.name} (${router.ip_address}) went offline`;
+                    showToast(msg, 'error');
+                    _addAlert(msg, 'offline');
+                } else if (!prev.online && isOnline) {
+                    const msg = `${router.name} (${router.ip_address}) is back online`;
+                    showToast(msg, 'success');
+                    _addAlert(msg, 'online');
+                }
             }
-
-            container.innerHTML = response.activities.map(activity => `
-                <div class="flex items-center justify-between py-2 border-b">
-                    <div>
-                        <p class="text-sm font-medium">${activity.username} - ${activity.action_type}</p>
-                        <p class="text-xs text-gray-500">${activity.resource_type}</p>
-                    </div>
-                    <div class="text-right">
-                        <span class="text-xs ${activity.success ? 'text-green-600' : 'text-red-600'}">
-                            ${activity.success ? 'Success' : 'Failed'}
-                        </span>
-                        <p class="text-xs text-gray-500">${formatDate(activity.created_at)}</p>
-                    </div>
-                </div>
-            `).join('');
         }
-    } catch (error) {
-        console.error('Failed to load recent activity:', error);
+        routerPreviousState[router.id] = { online: isOnline, name: router.name };
+        if (!isOnline) offlineNames.push(router.name);
+    });
+
+    // Banner
+    if (offlineNames.length > 0) {
+        banner.classList.remove('hidden');
+        bannerText.textContent =
+            `${offlineNames.length} router${offlineNames.length > 1 ? 's' : ''} offline: ${offlineNames.join(', ')}`;
+    } else {
+        banner.classList.add('hidden');
     }
+
+    if (routers.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center py-6 text-on-surface-variant text-sm">No routers configured</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = routers.map(router => {
+        const isOnline = router.connection_status === 'online';
+        const statusStyle = isOnline
+            ? 'background:rgba(34,197,94,0.12);color:#4ade80;border:1px solid rgba(34,197,94,0.25);'
+            : 'background:rgba(239,68,68,0.12);color:#f87171;border:1px solid rgba(239,68,68,0.25);';
+        const dotColor = isOnline ? '#4ade80' : '#f87171';
+        const lastSeen = router.last_sync_at ? formatDate(router.last_sync_at) : '—';
+
+        return `<tr>
+            <td>
+                <div class="flex items-center gap-2">
+                    <span class="material-symbols-outlined" style="font-size:15px;color:${dotColor};">router</span>
+                    <span class="font-medium text-on-surface text-sm">${escapeHtml(router.name)}</span>
+                </div>
+            </td>
+            <td class="font-mono text-xs text-on-surface-variant">${escapeHtml(router.ip_address)}</td>
+            <td>
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold" style="${statusStyle}">
+                    <span style="width:5px;height:5px;border-radius:50%;background:${dotColor};display:inline-block;"></span>
+                    ${isOnline ? 'Online' : 'Offline'}
+                </span>
+            </td>
+            <td class="text-xs text-on-surface-variant">${lastSeen}</td>
+            <td class="text-xs text-on-surface-variant">${escapeHtml(router.estate_name || '—')}</td>
+        </tr>`;
+    }).join('');
+}
+
+function _updateActiveSessions(sessions) {
+    const container = document.getElementById('active-sessions-overview');
+    const active = sessions.filter(s => s.active);
+
+    if (active.length === 0) {
+        container.innerHTML = '<p class="text-on-surface-variant text-sm text-center py-6">No active sessions right now</p>';
+        return;
+    }
+
+    container.innerHTML = `
+        <div class="table-wrap">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>User / MAC</th>
+                        <th>Package</th>
+                        <th>Started</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${active.map(s => `
+                    <tr>
+                        <td class="font-mono text-xs text-on-surface">${escapeHtml(s.username || '—')}</td>
+                        <td class="text-xs text-on-surface">${escapeHtml(s.package_name || '—')}</td>
+                        <td class="text-xs text-on-surface-variant">${formatDate(s.start_time)}</td>
+                        <td>
+                            <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-semibold"
+                                  style="background:rgba(34,197,94,0.12);color:#4ade80;">
+                                <span style="width:5px;height:5px;border-radius:50%;background:#4ade80;display:inline-block;"></span>
+                                Active
+                            </span>
+                        </td>
+                    </tr>`).join('')}
+                </tbody>
+            </table>
+        </div>`;
 }
 
 function startDashboardRefresh() {
-    if (dashboardInterval) {
-        clearInterval(dashboardInterval);
-    }
-
+    if (dashboardInterval) clearInterval(dashboardInterval);
     dashboardInterval = setInterval(() => {
         if (!document.getElementById('dashboard-section').classList.contains('hidden')) {
             loadDashboard();
         }
-    }, 30000); // Refresh every 30 seconds
+    }, 30000);
+}
+
+// =====================================================
+// NOTIFICATION SYSTEM
+// =====================================================
+
+function _addAlert(message, type) {
+    alertHistory.unshift({ id: Date.now(), message, type, time: new Date().toISOString() });
+    if (alertHistory.length > 20) alertHistory.pop();
+    unreadAlertCount++;
+    _updateAlertBadge();
+}
+
+function _updateAlertBadge() {
+    const badge = document.getElementById('alert-badge');
+    if (!badge) return;
+    if (unreadAlertCount > 0) {
+        badge.textContent = unreadAlertCount > 9 ? '9+' : String(unreadAlertCount);
+        badge.classList.remove('hidden');
+    } else {
+        badge.classList.add('hidden');
+    }
+}
+
+function toggleNotificationPanel() {
+    const panel = document.getElementById('notification-panel');
+    if (!panel) return;
+    const opening = panel.classList.contains('hidden');
+    panel.classList.toggle('hidden');
+    if (opening) {
+        unreadAlertCount = 0;
+        _updateAlertBadge();
+        _renderNotifications();
+    }
+}
+
+function _renderNotifications() {
+    const list = document.getElementById('notification-list');
+    if (!list) return;
+    if (alertHistory.length === 0) {
+        list.innerHTML = '<p class="text-xs text-on-surface-variant text-center py-6">No alerts yet</p>';
+        return;
+    }
+    list.innerHTML = alertHistory.map(alert => {
+        const icon  = alert.type === 'offline' ? 'wifi_off' : alert.type === 'online' ? 'wifi' : 'info';
+        const color = alert.type === 'offline' ? '#f87171' : alert.type === 'online' ? '#4ade80' : '#acaab5';
+        return `
+        <div class="flex items-start gap-2 py-2.5" style="border-bottom:1px solid rgba(72,71,81,0.18);">
+            <span class="material-symbols-outlined shrink-0 mt-0.5" style="font-size:14px;color:${color};">${icon}</span>
+            <div class="flex-1 min-w-0">
+                <p class="text-xs text-on-surface leading-snug">${escapeHtml(alert.message)}</p>
+                <p class="text-xs text-on-surface-variant mt-0.5">${formatDate(alert.time)}</p>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function clearAlerts() {
+    alertHistory = [];
+    unreadAlertCount = 0;
+    _updateAlertBadge();
+    _renderNotifications();
 }
 
 // =====================================================

@@ -98,6 +98,19 @@
 <!-- Modal Container -->
 <div id="modal-container"></div>
 
+<!-- Notification Panel -->
+<div id="notification-panel" class="hidden fixed z-40" style="top:0;left:224px;width:320px;max-height:100vh;">
+  <div class="m-3 rounded-2xl overflow-hidden shadow-2xl" style="background:#191923;border:1px solid rgba(72,71,81,0.4);">
+    <div class="px-4 py-3 flex items-center justify-between" style="border-bottom:1px solid rgba(72,71,81,0.25);">
+      <span style="font-family:'Syne',sans-serif;" class="text-sm font-bold text-on-surface">Router Alerts</span>
+      <button onclick="clearAlerts()" class="text-xs text-on-surface-variant hover:text-primary transition-colors">Clear all</button>
+    </div>
+    <div id="notification-list" class="overflow-y-auto px-3 py-2" style="max-height:420px;">
+      <p class="text-xs text-on-surface-variant text-center py-6">No alerts yet</p>
+    </div>
+  </div>
+</div>
+
 <!-- ==================== LOGIN PAGE ==================== -->
 <div id="login-page" class="relative z-10 min-h-screen flex items-center justify-center p-4">
   <div class="w-full max-w-sm">
@@ -140,9 +153,17 @@
     </div>
 
     <div class="px-4 py-3 border-b border-outline-variant/15">
-      <div class="flex items-center gap-2">
-        <div class="w-7 h-7 rounded-full btn-gradient flex items-center justify-center text-xs font-bold text-on-primary shrink-0">A</div>
-        <span id="admin-name" class="text-sm font-semibold text-on-surface truncate"></span>
+      <div class="flex items-center justify-between gap-2">
+        <div class="flex items-center gap-2 min-w-0">
+          <div class="w-7 h-7 rounded-full btn-gradient flex items-center justify-center text-xs font-bold text-on-primary shrink-0">A</div>
+          <span id="admin-name" class="text-sm font-semibold text-on-surface truncate"></span>
+        </div>
+        <button onclick="toggleNotificationPanel()" title="Alerts"
+          class="relative shrink-0 p-1.5 rounded-lg transition-colors hover:bg-surface-container">
+          <span class="material-symbols-outlined text-on-surface-variant" style="font-size:18px;">notifications</span>
+          <span id="alert-badge" class="hidden absolute -top-0.5 -right-0.5 min-w-[16px] h-4 rounded-full text-[10px] font-bold flex items-center justify-center"
+                style="background:#f87171;color:#fff;padding:0 3px;"></span>
+        </button>
       </div>
     </div>
 
@@ -188,35 +209,90 @@
 
     <!-- ── DASHBOARD SECTION ── -->
     <div id="dashboard-section" class="section">
-      <h2 class="font-headline text-2xl font-bold text-on-surface mb-6">Dashboard</h2>
-
-      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <div class="liquid-glass rounded-xl p-4">
-          <p class="text-xs text-on-surface-variant mb-1">Total Users</p>
-          <p class="font-headline text-2xl font-bold text-on-surface" id="stat-total-users">0</p>
-          <span class="material-symbols-outlined text-primary text-sm mt-1 block">group</span>
-        </div>
-        <div class="liquid-glass rounded-xl p-4">
-          <p class="text-xs text-on-surface-variant mb-1">Active Users</p>
-          <p class="font-headline text-2xl font-bold text-primary" id="stat-active-users">0</p>
-          <span class="material-symbols-outlined text-primary text-sm mt-1 block">person_check</span>
-        </div>
-        <div class="liquid-glass rounded-xl p-4">
-          <p class="text-xs text-on-surface-variant mb-1">Revenue (Month)</p>
-          <p class="font-headline text-2xl font-bold text-secondary font-mono" id="stat-revenue-month">KES 0</p>
-          <span class="material-symbols-outlined text-secondary text-sm mt-1 block">payments</span>
-        </div>
-        <div class="liquid-glass rounded-xl p-4">
-          <p class="text-xs text-on-surface-variant mb-1">Routers Online</p>
-          <p class="font-headline text-2xl font-bold text-on-surface" id="stat-routers-online">0</p>
-          <span class="material-symbols-outlined text-primary text-sm mt-1 block">router</span>
+      <div class="flex items-center justify-between mb-5">
+        <h2 class="font-headline text-2xl font-bold text-on-surface">Network Operations</h2>
+        <div class="flex items-center gap-3">
+          <span class="text-xs text-on-surface-variant font-mono hidden sm:block">Auto-refresh every 30s</span>
+          <button onclick="loadDashboard()" class="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg transition-colors"
+            style="background:rgba(255,255,255,0.05);border:1px solid rgba(72,71,81,0.35);color:#acaab5;"
+            onmouseover="this.style.background='rgba(255,255,255,0.09)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'">
+            <span class="material-symbols-outlined" style="font-size:14px;">refresh</span>Refresh
+          </button>
         </div>
       </div>
 
+      <!-- Offline Alert Banner (hidden until a router goes offline) -->
+      <div id="router-alert-banner" class="hidden mb-4 rounded-xl px-4 py-3 flex items-center gap-3"
+           style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);">
+        <span class="material-symbols-outlined shrink-0" style="color:#f87171;font-size:20px;">warning</span>
+        <span id="router-alert-text" class="text-sm font-semibold" style="color:#f87171;"></span>
+      </div>
+
+      <!-- KPI Cards -->
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
+        <div class="liquid-glass rounded-xl p-4">
+          <p class="text-xs text-on-surface-variant mb-1">Routers Online</p>
+          <p class="font-headline text-2xl font-bold" id="stat-routers-online">—</p>
+          <p class="text-xs text-on-surface-variant mt-0.5" id="stat-routers-total"></p>
+        </div>
+        <div class="liquid-glass rounded-xl p-4">
+          <p class="text-xs text-on-surface-variant mb-1">Active Sessions</p>
+          <p class="font-headline text-2xl font-bold text-primary" id="stat-active-sessions">—</p>
+          <span class="material-symbols-outlined text-primary text-sm mt-1 block">wifi</span>
+        </div>
+        <div class="liquid-glass rounded-xl p-4">
+          <p class="text-xs text-on-surface-variant mb-1">Revenue Today</p>
+          <p class="font-headline text-xl font-bold text-secondary font-mono" id="stat-revenue-today">KES —</p>
+          <p class="text-xs text-on-surface-variant font-mono mt-0.5" id="stat-revenue-month">Month: KES —</p>
+        </div>
+        <div class="liquid-glass rounded-xl p-4">
+          <p class="text-xs text-on-surface-variant mb-1">Packages Sold Today</p>
+          <p class="font-headline text-2xl font-bold text-on-surface" id="stat-packages-today">—</p>
+          <span class="material-symbols-outlined text-primary text-sm mt-1 block">inventory_2</span>
+        </div>
+      </div>
+
+      <!-- Hidden compat stubs for any JS that still reads these IDs -->
+      <span id="stat-total-users" class="hidden"></span>
+      <span id="stat-active-users" class="hidden"></span>
+
+      <!-- Router Health Panel -->
+      <div class="liquid-glass rounded-xl p-5 mb-4">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="font-headline text-base font-bold text-on-surface flex items-center gap-2">
+            <span class="material-symbols-outlined text-primary" style="font-size:18px;">router</span>
+            Router Health
+          </h3>
+          <span class="text-xs font-mono text-on-surface-variant" id="router-health-updated">—</span>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table" id="router-health-table">
+            <thead>
+              <tr>
+                <th>Router</th>
+                <th>IP Address</th>
+                <th>Status</th>
+                <th>Last Sync</th>
+                <th>Estate</th>
+              </tr>
+            </thead>
+            <tbody id="router-health-tbody">
+              <tr><td colspan="5" class="text-center py-6 text-on-surface-variant text-sm">Loading routers…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Active Sessions Overview -->
       <div class="liquid-glass rounded-xl p-5">
-        <h3 class="font-headline text-base font-bold text-on-surface mb-4">Recent Activity</h3>
-        <div id="recent-activity" class="space-y-2">
-          <p class="text-on-surface-variant text-sm">Loading...</p>
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="font-headline text-base font-bold text-on-surface flex items-center gap-2">
+            <span class="material-symbols-outlined text-primary" style="font-size:18px;">wifi</span>
+            Active Sessions
+          </h3>
+        </div>
+        <div id="active-sessions-overview">
+          <p class="text-on-surface-variant text-sm">Loading sessions…</p>
         </div>
       </div>
     </div>
