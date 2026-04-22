@@ -80,7 +80,18 @@ async function logout() {
 function showAdminPanel() {
     document.getElementById('login-page').classList.add('hidden');
     document.getElementById('admin-panel').classList.remove('hidden');
-    document.getElementById('admin-name').textContent = currentAdmin.full_name || currentAdmin.username;
+
+    const displayName = currentAdmin.full_name || currentAdmin.username || 'Admin';
+    const initial = displayName.charAt(0).toUpperCase();
+
+    const nameEl = document.getElementById('admin-name');
+    if (nameEl) nameEl.textContent = displayName;
+
+    const sidebarAvatar = document.getElementById('sidebar-avatar-initial');
+    if (sidebarAvatar) sidebarAvatar.textContent = initial;
+
+    const headerAvatar = document.getElementById('header-avatar-initial');
+    if (headerAvatar) headerAvatar.textContent = initial;
 
     loadDashboard();
     startDashboardRefresh();
@@ -153,52 +164,36 @@ async function apiCall(endpoint, method = 'GET', body = null) {
 // NAVIGATION
 // =====================================================
 
+const _sectionTitles = {
+    dashboard: 'Network Operations', users: 'Users Management',
+    packages: 'Packages Management', routers: 'MikroTik Routers',
+    sessions: 'Active Sessions', payments: 'Payments',
+    estates: 'Estates', admins: 'Admin Accounts', logs: 'Audit Logs'
+};
+
 function showSection(sectionName) {
-    // Hide all sections
-    document.querySelectorAll('.section').forEach(section => {
-        section.classList.add('hidden');
-    });
+    document.querySelectorAll('.section').forEach(s => s.classList.add('hidden'));
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
 
-    // Remove active class from all links
-    document.querySelectorAll('.sidebar-link').forEach(link => {
-        link.classList.remove('active');
-    });
-
-    // Show selected section
     document.getElementById(`${sectionName}-section`).classList.remove('hidden');
+    event.target.closest('.nav-item')?.classList.add('active');
 
-    // Add active class to clicked link
-    event.target.closest('.sidebar-link').classList.add('active');
+    const titleEl = document.getElementById('section-title');
+    if (titleEl) titleEl.textContent = _sectionTitles[sectionName] || sectionName;
 
-    // Load section data
+    const refreshBtn = document.getElementById('refresh-btn');
+    if (refreshBtn) refreshBtn.style.display = sectionName === 'dashboard' ? 'flex' : 'none';
+
     switch (sectionName) {
-        case 'dashboard':
-            loadDashboard();
-            break;
-        case 'users':
-            loadUsers();
-            break;
-        case 'packages':
-            loadPackages();
-            break;
-        case 'routers':
-            loadRouters();
-            break;
-        case 'sessions':
-            loadSessions();
-            break;
-        case 'payments':
-            loadPayments();
-            break;
-        case 'estates':
-            loadEstates();
-            break;
-        case 'admins':
-            loadAdmins();
-            break;
-        case 'logs':
-            loadLogs();
-            break;
+        case 'dashboard': loadDashboard(); break;
+        case 'users': loadUsers(); break;
+        case 'packages': loadPackages(); break;
+        case 'routers': loadRouters(); break;
+        case 'sessions': loadSessions(); break;
+        case 'payments': loadPayments(); break;
+        case 'estates': loadEstates(); break;
+        case 'admins': loadAdmins(); break;
+        case 'logs': loadLogs(); break;
     }
 }
 
@@ -231,14 +226,23 @@ function _updateKpiCards(response, sessions) {
 
     const online = s.routers?.online ?? '—';
     const total  = s.routers?.total  ?? null;
-    const el = document.getElementById('stat-routers-online');
-    el.textContent = online;
-    el.style.color = (typeof online === 'number' && total && online < total) ? '#f87171' : '#4ade80';
+    const routerEl = document.getElementById('stat-routers-online');
+    routerEl.textContent = online;
+    routerEl.style.color = (typeof online === 'number' && total && online < total) ? '#f87171' : '#4ade80';
     document.getElementById('stat-routers-total').textContent = total != null ? `of ${total} total` : '';
+    const routersPct = document.getElementById('stat-routers-pct');
+    if (routersPct) {
+        if (typeof online === 'number' && total) {
+            const pct = Math.round((online / total) * 100);
+            routersPct.textContent = `${pct}%`;
+            routersPct.className = 'kpi-pct' + (pct < 100 ? ' neg' : '');
+        } else {
+            routersPct.textContent = '—';
+        }
+    }
 
-    const activeSessions = sessions.filter(s => s.active).length;
-    document.getElementById('stat-active-sessions').textContent =
-        activeSessions || s.users?.active || '0';
+    const activeSessions = sessions.filter(s => s.active).length || s.users?.active || 0;
+    document.getElementById('stat-active-sessions').textContent = activeSessions || '0';
 
     const todayRev = s.revenue?.today;
     document.getElementById('stat-revenue-today').textContent =
@@ -248,6 +252,62 @@ function _updateKpiCards(response, sessions) {
 
     const pkgToday = s.packages?.today ?? s.transactions?.today ?? null;
     document.getElementById('stat-packages-today').textContent = pkgToday != null ? pkgToday : '—';
+
+    _updateRevenueChart(s);
+}
+
+function _updateRevenueChart(stats) {
+    const lineEl  = document.getElementById('revenue-chart-line');
+    const areaEl  = document.getElementById('revenue-chart-area');
+    const emptyEl = document.getElementById('revenue-chart-empty');
+    const labelsEl = document.getElementById('revenue-chart-labels');
+    if (!lineEl) return;
+
+    const weekData = stats?.revenue?.week_daily || [];
+    if (!weekData.length) { emptyEl && (emptyEl.style.display = ''); return; }
+    if (emptyEl) emptyEl.style.display = 'none';
+
+    const values = weekData.map(d => Number(d.amount || d.total || 0));
+    const max = Math.max(...values, 1);
+    const W = 400, H = 100, pad = 10;
+    const step = (W - pad * 2) / Math.max(values.length - 1, 1);
+    const pts = values.map((v, i) => [pad + i * step, H - pad - ((v / max) * (H - pad * 2))]);
+    const d = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ');
+    const areaD = d + ` L${pts[pts.length-1][0].toFixed(1)},${H} L${pad},${H} Z`;
+    lineEl.setAttribute('d', d);
+    areaEl.setAttribute('d', areaD);
+
+    if (labelsEl) {
+        labelsEl.innerHTML = weekData.map(d => {
+            const label = d.date ? new Date(d.date).toLocaleDateString('en', {weekday:'short'}) : '';
+            return `<span style="font-size:0.6rem;color:rgba(240,237,232,0.3);font-family:'JetBrains Mono',monospace;">${label}</span>`;
+        }).join('');
+    }
+}
+
+function _updateSystemActivity(alerts) {
+    const feed = document.getElementById('system-activity-feed');
+    if (!feed) return;
+    if (!alerts || alerts.length === 0) return;
+
+    const iconMap = { offline: { icon: 'wifi_off', color: '#f87171' }, online: { icon: 'wifi', color: '#4ade80' } };
+    feed.innerHTML = alerts.slice(0, 6).map(a => {
+        const cfg = iconMap[a.type] || { icon: 'info', color: '#C2777A' };
+        return `<div class="activity-item">
+            <div class="activity-icon-wrap" style="background:rgba(255,255,255,0.04);">
+                <span class="material-symbols-outlined" style="font-size:16px;color:${cfg.color};">${cfg.icon}</span>
+            </div>
+            <div style="min-width:0;">
+                <div class="activity-title">${a.msg || ''}</div>
+                <div class="activity-time">${a.ts ? new Date(a.ts).toLocaleTimeString() : ''}</div>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function setChartPeriod(period, btn) {
+    document.querySelectorAll('.chart-toggle-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
 }
 
 function _updateRouterHealth(routers) {
@@ -377,10 +437,11 @@ function startDashboardRefresh() {
 // =====================================================
 
 function _addAlert(message, type) {
-    alertHistory.unshift({ id: Date.now(), message, type, time: new Date().toISOString() });
+    alertHistory.unshift({ id: Date.now(), msg: message, type, ts: new Date().toISOString() });
     if (alertHistory.length > 20) alertHistory.pop();
     unreadAlertCount++;
     _updateAlertBadge();
+    _updateSystemActivity(alertHistory);
 }
 
 function _updateAlertBadge() {
@@ -420,8 +481,8 @@ function _renderNotifications() {
         <div class="flex items-start gap-2 py-2.5" style="border-bottom:1px solid rgba(72,71,81,0.18);">
             <span class="material-symbols-outlined shrink-0 mt-0.5" style="font-size:14px;color:${color};">${icon}</span>
             <div class="flex-1 min-w-0">
-                <p class="text-xs text-on-surface leading-snug">${escapeHtml(alert.message)}</p>
-                <p class="text-xs text-on-surface-variant mt-0.5">${formatDate(alert.time)}</p>
+                <p class="text-xs text-on-surface leading-snug">${escapeHtml(alert.msg || alert.message || '')}</p>
+                <p class="text-xs text-on-surface-variant mt-0.5">${formatDate(alert.ts || alert.time)}</p>
             </div>
         </div>`;
     }).join('');
