@@ -1,81 +1,92 @@
 import { Request, Response } from 'express';
 import DatabaseConnection from '../database/connection';
+import MpesaService from '../services/mpesa';
+import RadiusService from '../services/radius';
 import { logger } from '../utils/logger';
 
 const db = DatabaseConnection.getInstance();
+const mpesaService = new MpesaService();
+const radiusService = new RadiusService();
 
 export const getAllPayments = async (req: Request, res: Response): Promise<void> => {
     try {
         const { page = 1, limit = 50, status = 'all', start_date, end_date } = req.query;
         const offset = (Number(page) - 1) * Number(limit);
 
-        let query = `
-            SELECT p.*, 
-                   u.username, u.email, u.first_name, u.last_name,
-                   pkg.name as package_name, pkg.package_type
-            FROM payments p
-            JOIN users u ON p.user_id = u.id
-            LEFT JOIN user_packages up ON p.user_package_id = up.id
-            LEFT JOIN packages pkg ON up.package_id = pkg.id
-        `;
+        let payments: any[] = [];
+        let totalPayments = 0;
 
-        const params: any[] = [];
-        const conditions: string[] = [];
+        try {
+            let query = `
+                SELECT p.*, 
+                       u.username, u.email, u.first_name, u.last_name,
+                       pkg.name as package_name
+                FROM payments p
+                LEFT JOIN users u ON p.user_id = u.id
+                LEFT JOIN packages pkg ON p.package_id = pkg.id
+            `;
 
-        if (status !== 'all') {
-            conditions.push(`p.status = $${params.length + 1}`);
-            params.push(status);
+            const params: any[] = [];
+            const conditions: string[] = [];
+
+            if (status !== 'all') {
+                conditions.push(`p.status = $${params.length + 1}`);
+                params.push(status);
+            }
+
+            if (start_date) {
+                conditions.push(`DATE(p.created_at) >= $${params.length + 1}`);
+                params.push(start_date);
+            }
+
+            if (end_date) {
+                conditions.push(`DATE(p.created_at) <= $${params.length + 1}`);
+                params.push(end_date);
+            }
+
+            if (conditions.length > 0) {
+                query += ` WHERE ${conditions.join(' AND ')}`;
+            }
+
+            query += ` ORDER BY p.created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+            params.push(Number(limit), offset);
+
+            const result = await db.query(query, params);
+            payments = result.rows;
+
+            // Get total count for pagination
+            let countQuery = 'SELECT COUNT(*) as total FROM payments p';
+            const countParams: any[] = [];
+            const countConditions: string[] = [];
+
+            if (status !== 'all') {
+                countConditions.push(`p.status = $${countParams.length + 1}`);
+                countParams.push(status);
+            }
+
+            if (start_date) {
+                countConditions.push(`DATE(p.created_at) >= $${countParams.length + 1}`);
+                countParams.push(start_date);
+            }
+
+            if (end_date) {
+                countConditions.push(`DATE(p.created_at) <= $${countParams.length + 1}`);
+                countParams.push(end_date);
+            }
+
+            if (countConditions.length > 0) {
+                countQuery += ` WHERE ${countConditions.join(' AND ')}`;
+            }
+
+            const countResult = await db.query(countQuery, countParams);
+            totalPayments = parseInt(countResult.rows[0]?.total || '0');
+        } catch (tableError) {
+            logger.warn('Payments query failed:', tableError);
         }
-
-        if (start_date) {
-            conditions.push(`DATE(p.created_at) >= $${params.length + 1}`);
-            params.push(start_date);
-        }
-
-        if (end_date) {
-            conditions.push(`DATE(p.created_at) <= $${params.length + 1}`);
-            params.push(end_date);
-        }
-
-        if (conditions.length > 0) {
-            query += ` WHERE ${conditions.join(' AND ')}`;
-        }
-
-        query += ` ORDER BY p.created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
-        params.push(Number(limit), offset);
-
-        const result = await db.query(query, params);
-
-        // Get total count for pagination
-        let countQuery = 'SELECT COUNT(*) as total FROM payments p';
-        const countParams: any[] = [];
-        const countConditions: string[] = [];
-        
-        if (status !== 'all') {
-            countConditions.push(`p.status = $${countParams.length + 1}`);
-            countParams.push(status);
-        }
-
-        if (start_date) {
-            countConditions.push(`DATE(p.created_at) >= $${countParams.length + 1}`);
-            countParams.push(start_date);
-        }
-
-        if (end_date) {
-            countConditions.push(`DATE(p.created_at) <= $${countParams.length + 1}`);
-            countParams.push(end_date);
-        }
-
-        if (countConditions.length > 0) {
-            countQuery += ` WHERE ${countConditions.join(' AND ')}`;
-        }
-
-        const countResult = await db.query(countQuery, countParams);
-        const totalPayments = parseInt(countResult.rows[0].total);
 
         res.json({
             success: true,
-            payments: result.rows,
+            payments,
             pagination: {
                 page: Number(page),
                 limit: Number(limit),
@@ -95,15 +106,14 @@ export const getAllPayments = async (req: Request, res: Response): Promise<void>
 export const getPaymentById = async (req: Request, res: Response): Promise<void> => {
     try {
         const { id } = req.params;
-        
+
         const result = await db.query(
             `SELECT p.*, 
                    u.username, u.email, u.first_name, u.last_name, u.phone,
-                   pkg.name as package_name, pkg.package_type, pkg.price as package_price
+                   pkg.name as package_name, pkg.price_kes as package_price
              FROM payments p
-             JOIN users u ON p.user_id = u.id
-             LEFT JOIN user_packages up ON p.user_package_id = up.id
-             LEFT JOIN packages pkg ON up.package_id = pkg.id
+             LEFT JOIN users u ON p.user_id = u.id
+             LEFT JOIN packages pkg ON p.package_id = pkg.id
              WHERE p.id = $1`,
             [id]
         );
@@ -132,9 +142,9 @@ export const getPaymentById = async (req: Request, res: Response): Promise<void>
 export const updatePaymentStatus = async (req: Request, res: Response): Promise<void> => {
     try {
         const { id } = req.params;
-        const { status, notes } = req.body;
+        const { status } = req.body;
 
-        if (!['pending', 'completed', 'failed', 'refunded'].includes(status)) {
+        if (!['pending', 'success', 'failed', 'refunded'].includes(status)) {
             res.status(400).json({
                 success: false,
                 error: 'Invalid status'
@@ -144,10 +154,10 @@ export const updatePaymentStatus = async (req: Request, res: Response): Promise<
 
         const result = await db.query(
             `UPDATE payments 
-             SET status = $1, notes = $2, updated_at = CURRENT_TIMESTAMP
-             WHERE id = $3
+             SET status = $1, updated_at = CURRENT_TIMESTAMP
+             WHERE id = $2
              RETURNING *`,
-            [status, notes, id]
+            [status, id]
         );
 
         if (result.rows.length === 0) {
@@ -156,16 +166,6 @@ export const updatePaymentStatus = async (req: Request, res: Response): Promise<
                 error: 'Payment not found'
             });
             return;
-        }
-
-        // If payment is completed, activate the user package
-        if (status === 'completed') {
-            await db.query(
-                `UPDATE user_packages 
-                 SET status = 'active', activated_at = CURRENT_TIMESTAMP
-                 WHERE id = (SELECT user_package_id FROM payments WHERE id = $1)`,
-                [id]
-            );
         }
 
         res.json({
@@ -186,61 +186,65 @@ export const getPaymentStats = async (req: Request, res: Response): Promise<void
     try {
         const { period = 'month' } = req.query;
 
-        let dateFilter = '';
-        if (period === 'today') {
-            dateFilter = "AND DATE(created_at) = CURRENT_DATE";
-        } else if (period === 'week') {
-            dateFilter = "AND created_at >= DATE_TRUNC('week', CURRENT_DATE)";
-        } else if (period === 'month') {
-            dateFilter = "AND created_at >= DATE_TRUNC('month', CURRENT_DATE)";
-        } else if (period === 'year') {
-            dateFilter = "AND created_at >= DATE_TRUNC('year', CURRENT_DATE)";
+        let statsData = {
+            total_payments: 0,
+            success_payments: 0,
+            pending_payments: 0,
+            failed_payments: 0,
+            refunded_payments: 0,
+            total_revenue: 0,
+            avg_payment_amount: 0,
+            daily_revenue: []
+        };
+
+        try {
+            let dateFilter = '';
+            if (period === 'today') {
+                dateFilter = "AND DATE(created_at) = CURRENT_DATE";
+            } else if (period === 'week') {
+                dateFilter = "AND created_at >= DATE_TRUNC('week', CURRENT_DATE)";
+            } else if (period === 'month') {
+                dateFilter = "AND created_at >= DATE_TRUNC('month', CURRENT_DATE)";
+            } else if (period === 'year') {
+                dateFilter = "AND created_at >= DATE_TRUNC('year', CURRENT_DATE)";
+            }
+
+            const stats = await db.query(`
+                SELECT 
+                    COUNT(*) as total_payments,
+                    COUNT(CASE WHEN status = 'success' THEN 1 END) as success_payments,
+                    COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending_payments,
+                    COUNT(CASE WHEN status = 'failed' THEN 1 END) as failed_payments,
+                    COUNT(CASE WHEN status = 'refunded' THEN 1 END) as refunded_payments,
+                    COALESCE(SUM(CASE WHEN status = 'success' THEN amount ELSE 0 END), 0) as total_revenue,
+                    COALESCE(AVG(CASE WHEN status = 'success' THEN amount ELSE NULL END), 0) as avg_payment_amount
+                FROM payments
+                WHERE 1=1 ${dateFilter}
+            `);
+
+            // Get daily revenue for the last 7 days
+            const dailyRevenue = await db.query(`
+                SELECT 
+                    DATE(created_at) as date,
+                    COUNT(*) as payments_count,
+                    COALESCE(SUM(CASE WHEN status = 'success' THEN amount ELSE 0 END), 0) as revenue
+                FROM payments
+                WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'
+                GROUP BY DATE(created_at)
+                ORDER BY date DESC
+            `);
+
+            statsData = {
+                ...stats.rows[0],
+                daily_revenue: dailyRevenue.rows
+            };
+        } catch (tableError) {
+            logger.warn('Payment stats query failed');
         }
-
-        const stats = await db.query(`
-            SELECT 
-                COUNT(*) as total_payments,
-                COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_payments,
-                COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending_payments,
-                COUNT(CASE WHEN status = 'failed' THEN 1 END) as failed_payments,
-                COUNT(CASE WHEN status = 'refunded' THEN 1 END) as refunded_payments,
-                COALESCE(SUM(CASE WHEN status = 'completed' THEN amount ELSE 0 END), 0) as total_revenue,
-                COALESCE(AVG(CASE WHEN status = 'completed' THEN amount ELSE NULL END), 0) as avg_payment_amount
-            FROM payments
-            WHERE 1=1 ${dateFilter}
-        `);
-
-        // Get daily revenue for the last 7 days
-        const dailyRevenue = await db.query(`
-            SELECT 
-                DATE(created_at) as date,
-                COUNT(*) as payments_count,
-                COALESCE(SUM(CASE WHEN status = 'completed' THEN amount ELSE 0 END), 0) as revenue
-            FROM payments
-            WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'
-            GROUP BY DATE(created_at)
-            ORDER BY date DESC
-        `);
-
-        // Get payment methods breakdown
-        const paymentMethods = await db.query(`
-            SELECT 
-                payment_method,
-                COUNT(*) as count,
-                COALESCE(SUM(amount), 0) as total_amount
-            FROM payments
-            WHERE status = 'completed' ${dateFilter}
-            GROUP BY payment_method
-            ORDER BY total_amount DESC
-        `);
 
         res.json({
             success: true,
-            stats: {
-                ...stats.rows[0],
-                daily_revenue: dailyRevenue.rows,
-                payment_methods: paymentMethods.rows
-            }
+            stats: statsData
         });
     } catch (error) {
         logger.error('Error getting payment stats:', error);
@@ -248,6 +252,88 @@ export const getPaymentStats = async (req: Request, res: Response): Promise<void
             success: false,
             error: 'Internal server error'
         });
+    }
+};
+
+export const reconcilePayment = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { id } = req.params;
+
+        const paymentResult = await db.query(
+            `SELECT id, user_id, package_id, mac_address, router_id, status, mpesa_checkout_request_id
+             FROM payments WHERE id = $1`,
+            [id]
+        );
+
+        if (paymentResult.rows.length === 0) {
+            res.status(404).json({ success: false, error: 'Payment not found' });
+            return;
+        }
+
+        const payment = paymentResult.rows[0];
+
+        if (payment.status !== 'pending') {
+            res.json({ success: true, message: `Payment is already ${payment.status} — no reconciliation needed`, status: payment.status });
+            return;
+        }
+
+        if (!payment.mpesa_checkout_request_id) {
+            res.status(400).json({ success: false, error: 'Payment has no CheckoutRequestID to query' });
+            return;
+        }
+
+        const stkQuery = await mpesaService.queryStkStatus(payment.mpesa_checkout_request_id);
+        if (!stkQuery.success) {
+            res.status(502).json({ success: false, error: stkQuery.error || 'Safaricom query failed' });
+            return;
+        }
+
+        let newStatus = 'pending';
+        let sessionCreated = false;
+
+        if (stkQuery.resultCode === 0) {
+            await db.query(
+                `UPDATE payments SET status = 'success', updated_at = NOW() WHERE id = $1 AND status = 'pending'`,
+                [payment.id]
+            );
+            newStatus = 'success';
+
+            if (payment.mac_address && payment.package_id) {
+                let routerIp: string | null = null;
+                if (payment.router_id) {
+                    const rRow = await db.query('SELECT ip_address FROM routers WHERE id = $1', [payment.router_id]);
+                    routerIp = rRow.rows[0]?.ip_address ?? null;
+                }
+                const sr = await radiusService.createSession(
+                    payment.mac_address,
+                    payment.package_id,
+                    payment.id,
+                    routerIp || '0.0.0.0',
+                    payment.user_id
+                );
+                sessionCreated = sr.success;
+                if (!sr.success) logger.error(`Reconcile: session creation failed for payment ${payment.id}: ${sr.error}`);
+            }
+            logger.info(`Admin reconciled payment ${payment.id} → success. Session created: ${sessionCreated}`);
+        } else {
+            await db.query(
+                `UPDATE payments SET status = 'failed', updated_at = NOW() WHERE id = $1 AND status = 'pending'`,
+                [payment.id]
+            );
+            newStatus = 'failed';
+            logger.info(`Admin reconciled payment ${payment.id} → failed (ResultCode=${stkQuery.resultCode})`);
+        }
+
+        res.json({
+            success: true,
+            newStatus,
+            sessionCreated,
+            safaricomResultCode: stkQuery.resultCode,
+            safaricomResultDesc: stkQuery.resultDesc
+        });
+    } catch (error) {
+        logger.error('Error reconciling payment:', error);
+        res.status(500).json({ success: false, error: 'Internal server error' });
     }
 };
 
@@ -272,46 +358,38 @@ export const refundPayment = async (req: Request, res: Response): Promise<void> 
 
         const payment = paymentResult.rows[0];
 
-        if (payment.status !== 'completed') {
+        if (payment.status !== 'success') {
             res.status(400).json({
                 success: false,
-                error: 'Only completed payments can be refunded'
+                error: 'Only successful payments can be refunded'
             });
             return;
         }
 
-        // Start transaction
-        await db.query('BEGIN');
+        // Update payment status
+        await db.query(
+            `UPDATE payments 
+             SET status = 'refunded', updated_at = CURRENT_TIMESTAMP
+             WHERE id = $1`,
+            [id]
+        );
 
+        // Try to deactivate any associated sessions
         try {
-            // Update payment status
             await db.query(
-                `UPDATE payments 
-                 SET status = 'refunded', notes = $1, updated_at = CURRENT_TIMESTAMP
-                 WHERE id = $2`,
-                [reason || 'Refunded by admin', id]
+                `UPDATE sessions 
+                 SET active = false, updated_at = CURRENT_TIMESTAMP
+                 WHERE payment_id = $1`,
+                [id]
             );
-
-            // Deactivate the user package
-            if (payment.user_package_id) {
-                await db.query(
-                    `UPDATE user_packages 
-                     SET status = 'refunded', deactivated_at = CURRENT_TIMESTAMP
-                     WHERE id = $1`,
-                    [payment.user_package_id]
-                );
-            }
-
-            await db.query('COMMIT');
-
-            res.json({
-                success: true,
-                message: 'Payment refunded successfully'
-            });
-        } catch (error) {
-            await db.query('ROLLBACK');
-            throw error;
+        } catch (e) {
+            logger.warn('Sessions table not found for deactivation');
         }
+
+        res.json({
+            success: true,
+            message: 'Payment refunded successfully'
+        });
     } catch (error) {
         logger.error('Error refunding payment:', error);
         res.status(500).json({

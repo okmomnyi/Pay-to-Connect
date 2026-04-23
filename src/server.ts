@@ -1,9 +1,14 @@
+import dotenv from 'dotenv';
+
+// Load environment variables - MUST BE FIRST
+dotenv.config();
+
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
+import cookieParser from 'cookie-parser';
 import { join } from 'path';
-import dotenv from 'dotenv';
 
 import DatabaseConnection from './database/connection';
 import RadiusService from './services/radius';
@@ -16,12 +21,10 @@ import userRoutes from './routes/userRoutes';
 import profileRoutes from './routes/profileRoutes';
 import adminProfileRoutes from './routes/adminProfileRoutes';
 import publicRoutes from './routes/publicRoutes';
-
-// Load environment variables
-dotenv.config();
+import mpesaCallbackRoutes from './routes/mpesaCallbacks';
 
 class Server {
-    private app: express.Application;
+    public app: express.Application;
     private db: DatabaseConnection;
     private radiusService: RadiusService;
 
@@ -29,7 +32,7 @@ class Server {
         this.app = express();
         this.db = DatabaseConnection.getInstance();
         this.radiusService = new RadiusService();
-        
+
         this.validateEnvironment();
         this.setupMiddleware();
         this.setupRoutes();
@@ -37,6 +40,10 @@ class Server {
     }
 
     private setupMiddleware(): void {
+        // Trust the first proxy so req.ip reflects the real client IP (from X-Forwarded-For)
+        // Must be set before rate limiter and IP-based middleware
+        this.app.set('trust proxy', 1);
+
         // Security middleware
         this.app.use(helmet({
             contentSecurityPolicy: {
@@ -46,7 +53,7 @@ class Server {
                     scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://cdn.tailwindcss.com"],
                     scriptSrcAttr: ["'unsafe-inline'"],
                     imgSrc: ["'self'", "data:", "https:"],
-                    connectSrc: ["'self'", "http://localhost:3000", "https://localhost:3000"],
+                    connectSrc: ["'self'"],
                     fontSrc: ["'self'", "https://cdnjs.cloudflare.com", "data:"],
                     objectSrc: ["'none'"],
                     mediaSrc: ["'self'"],
@@ -65,15 +72,43 @@ class Server {
             xssFilter: true,
         }));
 
-        // CORS configuration
+        // CORS configuration — never default to wildcard
+        const allowedOrigins = process.env.CORS_ORIGIN
+            ? process.env.CORS_ORIGIN.split(',').map(o => o.trim()).filter(Boolean)
+            : [];
+
+        // Build the list of the server's own origins so same-origin requests are
+        // always allowed even when CORS_ORIGIN is set to a specific domain.
+        const port = process.env.PORT || '3000';
+        const serverHost = process.env.SERVER_HOST;
+        const selfOrigins = [
+            `http://localhost:${port}`,
+            `https://localhost:${port}`,
+            `http://127.0.0.1:${port}`,
+            `https://127.0.0.1:${port}`,
+            ...(serverHost ? [`http://${serverHost}`, `https://${serverHost}`] : [])
+        ];
+
         this.app.use(cors({
-            origin: process.env.CORS_ORIGIN || '*',
+            origin: (origin, callback) => {
+                // Allow requests with no origin (mobile apps, curl, Postman)
+                if (!origin) return callback(null, true);
+                // Allow when no restriction is configured
+                if (allowedOrigins.length === 0) return callback(null, true);
+                // Allow explicitly listed origins
+                if (allowedOrigins.includes(origin)) return callback(null, true);
+                // Always allow same-server origins (prevents 500 for same-origin browser requests)
+                if (selfOrigins.includes(origin)) return callback(null, true);
+                // Blocked — do NOT pass an Error (that triggers next(error) → 500).
+                // Return false so cors() skips setting headers; the browser enforces CORS.
+                return callback(null, false);
+            },
             credentials: true,
             methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
             allowedHeaders: ['Content-Type', 'Authorization']
         }));
 
-        // Rate limiting
+        // Rate limiting — M-Pesa callback routes are exempt so Safaricom can always reach them
         const generalLimiter = rateLimit({
             windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000'), // 15 minutes
             max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100'),
@@ -83,20 +118,27 @@ class Server {
             },
             standardHeaders: true,
             legacyHeaders: false,
+            skip: (req) => req.path.startsWith('/callbacks/mpesa'),
         });
 
         this.app.use(generalLimiter);
+
+        // Cookie parsing (required for httpOnly auth tokens)
+        this.app.use(cookieParser());
 
         // Body parsing middleware
         this.app.use(express.json({ limit: '10mb' }));
         this.app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-        // Input sanitization
-        this.app.use(sanitizeInput);
-        this.app.use(validateNoSQLInjection);
-
-        // Trust proxy for accurate IP addresses
-        this.app.set('trust proxy', 1);
+        // Input sanitization — skip M-Pesa callback routes to prevent body modification
+        this.app.use((req, res, next) => {
+            if (req.path.startsWith('/callbacks/mpesa')) return next();
+            return sanitizeInput(req, res, next);
+        });
+        this.app.use((req, res, next) => {
+            if (req.path.startsWith('/callbacks/mpesa')) return next();
+            return validateNoSQLInjection(req, res, next);
+        });
 
         // Request logging
         this.app.use((req, res, next) => {
@@ -115,7 +157,7 @@ class Server {
             try {
                 // Check database connection
                 await this.db.query('SELECT 1');
-                
+
                 // Check Redis connection (optional)
                 let redisStatus = 'disabled';
                 if (this.db.isRedisEnabled()) {
@@ -148,6 +190,9 @@ class Server {
                 });
             }
         });
+
+        // M-Pesa callback routes (no auth prefix — Safaricom calls these directly)
+        this.app.use('/callbacks/mpesa', mpesaCallbackRoutes);
 
         // API routes (must be before catch-all routes)
         this.app.use('/api/portal', portalRoutes);
@@ -182,7 +227,7 @@ class Server {
 
         // Profile page route
         this.app.get('/profile', (req, res) => {
-            res.sendFile(join(__dirname, '../public/profile-enhanced.html'));
+            res.sendFile(join(__dirname, '../public/profile.html'));
         });
 
         // Portal page route
@@ -227,8 +272,8 @@ class Server {
 
             res.status(500).json({
                 success: false,
-                error: process.env.NODE_ENV === 'production' 
-                    ? 'Internal server error' 
+                error: process.env.NODE_ENV === 'production'
+                    ? 'Internal server error'
                     : error.message
             });
         });
@@ -242,7 +287,8 @@ class Server {
             'DB_PORT',
             'DB_NAME',
             'DB_USER',
-            'DB_PASSWORD'
+            'DB_PASSWORD',
+            'ENCRYPTION_KEY'
         ];
 
         const missing = requiredEnvVars.filter(varName => !process.env[varName]);
@@ -260,7 +306,7 @@ class Server {
             }
             logger.warn('WARNING: Using default JWT_SECRET. Please change this in production!');
         }
-        
+
         if (process.env.JWT_SECRET && process.env.JWT_SECRET.length < 32) {
             logger.warn('WARNING: JWT_SECRET is too short. Use at least 32 characters.');
         }
@@ -318,7 +364,7 @@ class Server {
 }
 
 // Handle graceful shutdown
-const server = new Server();
+export const server = new Server();
 
 process.on('SIGTERM', async () => {
     logger.info('SIGTERM received, shutting down gracefully');

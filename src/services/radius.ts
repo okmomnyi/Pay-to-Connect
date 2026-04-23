@@ -103,6 +103,9 @@ class RadiusService {
         LOGIN_LAT_PORT: 63
     };
 
+    private routerCacheExpiry: number = 0;
+    private readonly CACHE_TTL_MS = 60_000; // refresh router list every 60 seconds
+
     constructor() {
         this.db = DatabaseConnection.getInstance();
         this.loadRouters();
@@ -110,8 +113,14 @@ class RadiusService {
 
     private async loadRouters(): Promise<void> {
         try {
+            const radiusSecret = process.env.RADIUS_SECRET;
+            if (!radiusSecret) {
+                logger.error('RADIUS_SECRET is not set — no routers will be recognised');
+                return;
+            }
+
             const result = await this.db.query(
-                'SELECT id, ip_address, shared_secret FROM routers WHERE active = true'
+                'SELECT id, ip_address FROM routers WHERE active = true'
             );
 
             this.routers.clear();
@@ -119,14 +128,28 @@ class RadiusService {
                 this.routers.set(router.ip_address, {
                     id: router.id,
                     ip: router.ip_address,
-                    secret: router.shared_secret
+                    secret: radiusSecret
                 });
             });
 
+            this.routerCacheExpiry = Date.now() + this.CACHE_TTL_MS;
             logger.info(`Loaded ${this.routers.size} active routers`);
         } catch (error) {
             logger.error('Failed to load routers:', error);
         }
+    }
+
+    /** Returns router config, refreshing the in-memory list if the cache is stale. */
+    private async getRouter(remoteAddress: string): Promise<RouterConfig | undefined> {
+        if (Date.now() >= this.routerCacheExpiry) {
+            await this.loadRouters();
+        }
+        return this.routers.get(remoteAddress);
+    }
+
+    /** Call after adding/updating a router so it is immediately recognised. */
+    public async refreshRouters(): Promise<void> {
+        await this.loadRouters();
     }
 
     private createRadiusPacket(code: number, identifier: number, authenticator: Buffer, attributes: RadiusAttribute[]): Buffer {
@@ -244,29 +267,37 @@ class RadiusService {
         }
     }
 
-    public async createSession(deviceMacAddress: string, packageId: string, paymentId: string, routerIp: string): Promise<{ success: boolean; sessionId?: string; error?: string }> {
+    public async createSession(deviceMacAddress: string, packageId: string, paymentId: string, routerIp: string, userId?: string): Promise<{ success: boolean; sessionId?: string; error?: string }> {
         try {
             return await this.db.transaction(async (client) => {
                 // Get or create device
                 let deviceResult = await client.query(
-                    'SELECT id FROM devices WHERE mac_address = $1',
+                    'SELECT id, user_id FROM devices WHERE mac_address = $1',
                     [deviceMacAddress]
                 );
 
                 let deviceId: string;
                 if (deviceResult.rows.length === 0) {
+                    // Create new device, link to user if userId provided
                     const newDevice = await client.query(
-                        'INSERT INTO devices (mac_address) VALUES ($1) RETURNING id',
-                        [deviceMacAddress]
+                        'INSERT INTO devices (mac_address, user_id) VALUES ($1, $2) RETURNING id',
+                        [deviceMacAddress, userId || null]
                     );
                     deviceId = newDevice.rows[0].id;
                 } else {
                     deviceId = deviceResult.rows[0].id;
-                    // Update last seen
-                    await client.query(
-                        'UPDATE devices SET last_seen = NOW() WHERE id = $1',
-                        [deviceId]
-                    );
+                    // Update last seen and link to user if not already linked
+                    if (userId && !deviceResult.rows[0].user_id) {
+                        await client.query(
+                            'UPDATE devices SET last_seen = NOW(), user_id = $1 WHERE id = $2',
+                            [userId, deviceId]
+                        );
+                    } else {
+                        await client.query(
+                            'UPDATE devices SET last_seen = NOW() WHERE id = $1',
+                            [deviceId]
+                        );
+                    }
                 }
 
                 // Get package details
@@ -281,35 +312,23 @@ class RadiusService {
 
                 const durationMinutes = packageResult.rows[0].duration_minutes;
 
-                // Get router ID
-                const routerResult = await client.query(
-                    'SELECT id FROM routers WHERE ip_address = $1 AND active = true',
-                    [routerIp]
-                );
-
-                if (routerResult.rows.length === 0) {
-                    return { success: false, error: 'Router not found or inactive' };
-                }
-
-                const routerId = routerResult.rows[0].id;
-
                 // Deactivate any existing sessions for this device
                 await client.query(
                     'UPDATE sessions SET active = false WHERE device_id = $1 AND active = true',
                     [deviceId]
                 );
 
-                // Create new session
+                // Create new session with router IP and user_id
                 const endTime = new Date(Date.now() + durationMinutes * 60 * 1000);
                 const sessionResult = await client.query(`
-                    INSERT INTO sessions (device_id, package_id, payment_id, router_id, end_time)
-                    VALUES ($1, $2, $3, $4, $5)
+                    INSERT INTO sessions (device_id, package_id, payment_id, router_ip, end_time, user_id, active)
+                    VALUES ($1, $2, $3, $4::inet, $5, $6, true)
                     RETURNING id
-                `, [deviceId, packageId, paymentId, routerId, endTime]);
+                `, [deviceId, packageId, paymentId, routerIp, endTime, userId || null]);
 
                 const sessionId = sessionResult.rows[0].id;
 
-                logger.info(`Created session ${sessionId} for device ${deviceMacAddress}, expires at ${endTime.toISOString()}`);
+                logger.info(`Created session ${sessionId} for device ${deviceMacAddress}, user ${userId || 'anonymous'}, expires at ${endTime.toISOString()}`);
 
                 return { success: true, sessionId };
             });
@@ -321,14 +340,14 @@ class RadiusService {
 
     public async handleRadiusRequest(buffer: Buffer, remoteAddress: string): Promise<Buffer | null> {
         try {
-            const router = this.routers.get(remoteAddress);
+            const router = await this.getRouter(remoteAddress);
             if (!router) {
                 logger.warn(`RADIUS request from unknown router: ${remoteAddress}`);
                 return null;
             }
 
             const packet = this.parseRadiusPacket(buffer);
-            
+
             if (packet.code === this.RADIUS_CODES.ACCESS_REQUEST) {
                 return await this.handleAccessRequest(packet, router);
             } else if (packet.code === this.RADIUS_CODES.ACCOUNTING_REQUEST) {
@@ -381,9 +400,9 @@ class RadiusService {
         try {
             // For now, just acknowledge accounting requests
             // In production, you might want to log session start/stop events
-            
+
             const attributes: RadiusAttribute[] = [];
-            
+
             const responsePacket = this.createRadiusPacket(
                 this.RADIUS_CODES.ACCOUNTING_RESPONSE,
                 packet.identifier,
@@ -499,24 +518,144 @@ class RadiusService {
     public async disconnectDevice(macAddress: string): Promise<void> {
         try {
             logger.info(`Disconnecting device: ${macAddress}`);
-            
-            // Update session to inactive
+
+            // Find the active session and the router it is connected to
+            const sessionResult = await this.db.query(`
+                SELECT s.id, s.router_ip::text AS router_ip, d.mac_address
+                FROM sessions s
+                JOIN devices d ON s.device_id = d.id
+                WHERE d.mac_address = $1 AND s.active = true
+                LIMIT 1
+            `, [macAddress]);
+
+            // Mark the session inactive in our DB immediately
             await this.db.query(`
                 UPDATE sessions s
                 SET active = false
                 FROM devices d
-                WHERE s.device_id = d.id 
-                AND d.mac_address = $1 
+                WHERE s.device_id = d.id
+                AND d.mac_address = $1
                 AND s.active = true
             `, [macAddress]);
 
-            // In a real implementation, this would send a RADIUS Disconnect-Request
-            // to the NAS/router to immediately terminate the user's session
+            // If we know which router the device is on, send RFC 3576 Disconnect-Request
+            if (sessionResult.rows.length > 0) {
+                const routerIp = sessionResult.rows[0].router_ip;
+                const radiusSecret = process.env.RADIUS_SECRET;
+                if (!radiusSecret) {
+                    logger.error('RADIUS_SECRET is not set — cannot send Disconnect-Request');
+                    return;
+                }
+                try {
+                    await this.sendDisconnectRequest(routerIp, radiusSecret, macAddress);
+                } catch (coaError) {
+                    // Log but don't fail — DB session is already marked inactive;
+                    // the device will be rejected on its next re-auth attempt.
+                    logger.warn(`Disconnect-Request to ${routerIp} failed (will expire on next re-auth):`, coaError);
+                }
+            }
+
             logger.info(`Device ${macAddress} disconnected successfully`);
         } catch (error) {
             logger.error(`Failed to disconnect device ${macAddress}:`, error);
             throw error;
         }
+    }
+
+    /**
+     * Sends an RFC 3576 Disconnect-Request (code 40) to the router's CoA port (3799).
+     * Resolves when the router replies with Disconnect-ACK (41).
+     * Rejects if the router replies with Disconnect-NAK (42) or does not respond within 5 s.
+     */
+    private sendDisconnectRequest(routerIp: string, secret: string, macAddress: string): Promise<void> {
+        return new Promise((resolve, reject) => {
+            const COA_PORT = 3799;
+            const TIMEOUT_MS = 5000;
+            const identifier = Math.floor(Math.random() * 256);
+
+            // Build attributes: Calling-Station-Id (31) = MAC address
+            const macBuf = Buffer.from(macAddress, 'utf8');
+            const attrBuf = Buffer.alloc(2 + macBuf.length);
+            attrBuf.writeUInt8(31, 0);           // Calling-Station-Id type
+            attrBuf.writeUInt8(attrBuf.length, 1);
+            macBuf.copy(attrBuf, 2);
+
+            const totalLength = 20 + attrBuf.length;
+            const packet = Buffer.alloc(totalLength);
+
+            packet.writeUInt8(40, 0);                   // Disconnect-Request
+            packet.writeUInt8(identifier, 1);
+            packet.writeUInt16BE(totalLength, 2);
+            packet.fill(0, 4, 20);                      // Authenticator placeholder = 0x00*16
+            attrBuf.copy(packet, 20);
+
+            // Authenticator = MD5(Code + ID + Length + 0x00*16 + Attrs + Secret)
+            const hash = crypto.createHash('md5');
+            hash.update(packet);
+            hash.update(secret);
+            const authenticator = hash.digest();
+            authenticator.copy(packet, 4);
+
+            const socket = dgram.createSocket('udp4');
+            let settled = false;
+
+            const timer = setTimeout(() => {
+                if (!settled) {
+                    settled = true;
+                    socket.close();
+                    reject(new Error(`Disconnect-Request to ${routerIp}:${COA_PORT} timed out`));
+                }
+            }, TIMEOUT_MS);
+
+            socket.on('message', (msg) => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(timer);
+                socket.close();
+
+                const code = msg.readUInt8(0);
+                if (code === 41) {
+                    // Disconnect-ACK
+                    resolve();
+                } else {
+                    // Disconnect-NAK (42) or unexpected code
+                    const replyAttrStart = 20;
+                    let replyMsg = `NAK (code ${code})`;
+                    if (msg.length > replyAttrStart) {
+                        // Try to extract Reply-Message (type 18) for diagnostics
+                        let off = replyAttrStart;
+                        while (off + 2 <= msg.length) {
+                            const aType = msg.readUInt8(off);
+                            const aLen = msg.readUInt8(off + 1);
+                            if (aType === 18 && aLen > 2) {
+                                replyMsg = msg.slice(off + 2, off + aLen).toString('utf8');
+                                break;
+                            }
+                            off += Math.max(aLen, 2);
+                        }
+                    }
+                    reject(new Error(`Disconnect-NAK from ${routerIp}: ${replyMsg}`));
+                }
+            });
+
+            socket.on('error', (err) => {
+                if (!settled) {
+                    settled = true;
+                    clearTimeout(timer);
+                    socket.close();
+                    reject(err);
+                }
+            });
+
+            socket.send(packet, COA_PORT, routerIp, (err) => {
+                if (err && !settled) {
+                    settled = true;
+                    clearTimeout(timer);
+                    socket.close();
+                    reject(err);
+                }
+            });
+        });
     }
 }
 

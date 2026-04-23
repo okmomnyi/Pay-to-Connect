@@ -4,8 +4,10 @@ import mikrotikService from '../services/mikrotikService';
 import encryptionService from '../utils/encryption';
 import auditService from '../services/auditService';
 import { logger } from '../utils/logger';
+import RadiusService from '../services/radius';
 
 const db = DatabaseConnection.getInstance();
+const radiusService = new RadiusService();
 
 export const getAllRouters = async (req: Request, res: Response): Promise<void> => {
     try {
@@ -119,13 +121,13 @@ export const createRouter = async (req: Request, res: Response): Promise<void> =
 
         const router = routerResult.rows[0];
 
-        // Encrypt and store credentials
+        // Encrypt and store credentials with auth tag
         const encrypted = encryptionService.encrypt(api_password);
 
         await db.query(
-            `INSERT INTO router_credentials (router_id, api_username, api_password_encrypted, encryption_iv)
-             VALUES ($1, $2, $3, $4)`,
-            [router.id, api_username, encrypted.encrypted, encrypted.iv]
+            `INSERT INTO router_credentials (router_id, api_username, api_password_encrypted, encryption_iv, encryption_auth_tag)
+             VALUES ($1, $2, $3, $4, $5)`,
+            [router.id, api_username, encrypted.encrypted, encrypted.iv, encrypted.authTag]
         );
 
         // Initialize sync status
@@ -149,6 +151,9 @@ export const createRouter = async (req: Request, res: Response): Promise<void> =
             success: true
         });
 
+        // Immediately make the new router visible to the RADIUS server
+        radiusService.refreshRouters().catch(e => logger.warn('RADIUS refresh after create failed:', e));
+
         res.status(201).json({
             success: true,
             message: 'Router created successfully',
@@ -166,7 +171,7 @@ export const createRouter = async (req: Request, res: Response): Promise<void> =
 export const updateRouter = async (req: Request, res: Response): Promise<void> => {
     try {
         const { id } = req.params;
-        const { name, description, estate_id, active } = req.body;
+        const { name, description, estate_id, active, api_username, api_password } = req.body;
 
         // Get current state
         const beforeResult = await db.query(
@@ -217,6 +222,34 @@ export const updateRouter = async (req: Request, res: Response): Promise<void> =
             );
         }
 
+        // Update credentials if provided
+        if (api_username || api_password) {
+            const credUpdates: string[] = [];
+            const credValues: any[] = [];
+            let credIdx = 1;
+
+            if (api_username) {
+                credUpdates.push(`api_username = $${credIdx++}`);
+                credValues.push(api_username);
+            }
+
+            if (api_password) {
+                const encrypted = encryptionService.encrypt(api_password);
+                credUpdates.push(`api_password_encrypted = $${credIdx++}`);
+                credValues.push(encrypted.encrypted);
+                credUpdates.push(`encryption_iv = $${credIdx++}`);
+                credValues.push(encrypted.iv);
+                credUpdates.push(`encryption_auth_tag = $${credIdx++}`);
+                credValues.push(encrypted.authTag);
+            }
+
+            credValues.push(id);
+            await db.query(
+                `UPDATE router_credentials SET ${credUpdates.join(', ')} WHERE router_id = $${credIdx}`,
+                credValues
+            );
+        }
+
         // Get updated state
         const afterResult = await db.query(
             'SELECT * FROM routers WHERE id = $1',
@@ -237,6 +270,8 @@ export const updateRouter = async (req: Request, res: Response): Promise<void> =
             userAgent: req.get('User-Agent') || undefined,
             success: true
         });
+
+        radiusService.refreshRouters().catch(e => logger.warn('RADIUS refresh after update failed:', e));
 
         res.json({
             success: true,
@@ -287,6 +322,8 @@ export const deleteRouter = async (req: Request, res: Response): Promise<void> =
             userAgent: req.get('User-Agent') || undefined,
             success: true
         });
+
+        radiusService.refreshRouters().catch(e => logger.warn('RADIUS refresh after delete failed:', e));
 
         res.json({
             success: true,
@@ -385,6 +422,207 @@ export const getRouterLogs = async (req: Request, res: Response): Promise<void> 
         res.status(500).json({
             success: false,
             error: 'Failed to fetch router logs'
+        });
+    }
+};
+
+export const getRouterSetupScript = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { id } = req.params;
+
+        const routerResult = await db.query(
+            `SELECT r.*, e.name as estate_name
+             FROM routers r
+             LEFT JOIN estates e ON r.estate_id = e.id
+             WHERE r.id = $1`,
+            [id]
+        );
+
+        if (routerResult.rows.length === 0) {
+            res.status(404).json({ success: false, error: 'Router not found' });
+            return;
+        }
+
+        const router = routerResult.rows[0];
+        const radiusSecret = process.env.RADIUS_SECRET;
+        if (!radiusSecret) {
+            res.status(500).json({ success: false, error: 'RADIUS_SECRET is not configured on the server. Set it in .env before generating setup scripts.' });
+            return;
+        }
+        const serverHost = process.env.SERVER_HOST || req.hostname || 'YOUR_SERVER_IP';
+        const serverPort = process.env.PORT || '3000';
+        const radiusPort = '1812';
+
+        // Generate the RouterOS script
+        const script = `# ============================================================
+# Pay-to-Connect Setup Script for: ${router.name}
+# Estate: ${router.estate_name || 'N/A'}
+# Server: ${serverHost}
+# Generated: ${new Date().toISOString()}
+# ============================================================
+# Paste this script into your MikroTik terminal (Winbox or SSH)
+# ============================================================
+
+# 1. Configure RADIUS client
+/radius
+add address=${serverHost} secret="${radiusSecret}" service=hotspot,login authentication-port=${radiusPort} accounting-port=1813 timeout=3s
+print
+
+# 2. Enable hotspot RADIUS authentication and accounting
+/ip hotspot profile
+set [find name=default] use-radius=yes
+
+# 3. Configure hotspot login page to redirect to Pay-to-Connect portal
+/ip hotspot profile
+set [find name=default] login-by=mac-cookie,mac,http-chap login-page="http://${serverHost}:${serverPort}/portal"
+
+# 4. Make sure the hotspot walled garden allows the portal server
+/ip hotspot walled-garden
+add dst-host="${serverHost}" action=allow comment="Pay-to-Connect Portal"
+
+# 5. Configure hotspot RADIUS accounting
+/ip hotspot profile
+set [find name=default] accounting=yes interim-update=5m
+
+# 6. Set hotspot to send MAC address as username (required for this billing system)
+/ip hotspot profile
+set [find name=default] login-by=mac
+
+# 7. Enable API-SSL service (required for admin panel remote management)
+/ip service
+enable api-ssl
+set api-ssl port=8729
+
+# 8. (Optional) Set system identity for identification in admin panel
+/system identity
+set name="${router.name.replace(/[^a-zA-Z0-9-]/g, '-')}"
+
+# 9. Verify RADIUS configuration
+/radius print
+/ip hotspot profile print
+/ip service print where name=api-ssl
+
+# ============================================================
+# After running this script:
+# 1. Go back to the admin panel
+# 2. Click "Test Connection" on this router to verify API access
+# 3. Click "Sync Packages" to push WiFi packages to this router
+# 4. Users can now pay on the portal and get automatic access
+# ============================================================
+`;
+
+        res.json({
+            success: true,
+            router: { id: router.id, name: router.name },
+            script
+        });
+    } catch (error) {
+        logger.error('Get router setup script error:', error);
+        res.status(500).json({ success: false, error: 'Failed to generate setup script' });
+    }
+};
+
+export const getRouterActiveSessions = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { id } = req.params;
+
+        // Check router exists
+        const routerResult = await db.query('SELECT name, ip_address FROM routers WHERE id = $1', [id]);
+        if (routerResult.rows.length === 0) {
+            res.status(404).json({ success: false, error: 'Router not found' });
+            return;
+        }
+
+        const sessions = await mikrotikService.getActiveSessions(id);
+
+        res.json({
+            success: true,
+            router: routerResult.rows[0],
+            sessions: sessions.map((s: any) => ({
+                id: s['.id'],
+                user: s.user,
+                address: s.address,
+                mac_address: s['mac-address'],
+                uptime: s.uptime,
+                bytes_in: s['bytes-in'],
+                bytes_out: s['bytes-out'],
+                packets_in: s['packets-in'],
+                packets_out: s['packets-out'],
+                server: s.server,
+                status: s.status
+            }))
+        });
+    } catch (error) {
+        logger.error('Get router active sessions error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch active sessions'
+        });
+    }
+};
+
+export const getRouterSystemInfo = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { id } = req.params;
+
+        // Check router exists
+        const routerResult = await db.query('SELECT name, ip_address, connection_status FROM routers WHERE id = $1', [id]);
+        if (routerResult.rows.length === 0) {
+            res.status(404).json({ success: false, error: 'Router not found' });
+            return;
+        }
+
+        const result = await mikrotikService.getSystemInfo(id);
+
+        if (result.success) {
+            // Update router status to online
+            await db.query(
+                `UPDATE routers SET connection_status = 'online', last_health_check = CURRENT_TIMESTAMP WHERE id = $1`,
+                [id]
+            );
+        } else {
+            await db.query(
+                `UPDATE routers SET connection_status = 'offline', last_health_check = CURRENT_TIMESTAMP WHERE id = $1`,
+                [id]
+            );
+        }
+
+        res.json({
+            success: result.success,
+            router: routerResult.rows[0],
+            info: result.info,
+            error: result.error
+        });
+    } catch (error) {
+        logger.error('Get router system info error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch system info'
+        });
+    }
+};
+
+export const getRouterHotspotUsers = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { id } = req.params;
+
+        const routerResult = await db.query('SELECT name FROM routers WHERE id = $1', [id]);
+        if (routerResult.rows.length === 0) {
+            res.status(404).json({ success: false, error: 'Router not found' });
+            return;
+        }
+
+        const users = await mikrotikService.getHotspotUsers(id);
+
+        res.json({
+            success: true,
+            users
+        });
+    } catch (error) {
+        logger.error('Get router hotspot users error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch hotspot users'
         });
     }
 };

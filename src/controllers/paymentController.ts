@@ -1,7 +1,10 @@
 import { Request, Response } from 'express';
 import paymentService from '../services/paymentService';
 import sessionService from '../services/sessionService';
+import DatabaseConnection from '../database/connection';
 import { logger } from '../utils/logger';
+
+const db = DatabaseConnection.getInstance();
 
 export class PaymentController {
     async initiatePurchase(req: Request, res: Response): Promise<void> {
@@ -14,13 +17,32 @@ export class PaymentController {
                 return;
             }
 
+            // Look up actual package price from the database
+            const pkgResult = await db.query(
+                'SELECT id, name, price_kes FROM packages WHERE id = $1 AND active = true',
+                [packageId]
+            );
+
+            if (pkgResult.rows.length === 0) {
+                res.status(404).json({ error: 'Package not found or inactive' });
+                return;
+            }
+
+            const packageData = pkgResult.rows[0];
+            const amount = parseFloat(packageData.price_kes);
+
+            if (!amount || amount <= 0) {
+                res.status(400).json({ error: 'Invalid package price' });
+                return;
+            }
+
             const deviceId = await sessionService.getOrCreateDevice(macAddress);
 
             const payment = await paymentService.initiateStkPush({
                 phoneNumber,
-                amount: 0,
+                amount,
                 accountReference: `PKG-${packageId.substring(0, 8)}`,
-                transactionDesc: 'Internet Package Purchase',
+                transactionDesc: `${packageData.name} - Internet Package`,
             });
 
             const purchase = await paymentService.createPurchase(
@@ -62,9 +84,10 @@ export class PaymentController {
 
     async getPaymentStatus(req: Request, res: Response): Promise<void> {
         try {
+            const userId = (req as any).user.id;
             const { paymentId } = req.params;
 
-            const payment = await paymentService.getPaymentStatus(paymentId);
+            const payment = await paymentService.getPaymentStatus(paymentId, userId);
 
             res.status(200).json({
                 success: true,

@@ -1,5 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
-import pool from '../database/db';
+import DatabaseConnection from '../database/connection';
+import encryptionService from '../utils/encryption';
+import { logger } from '../utils/logger';
 
 export interface AdminUser {
     id: string;
@@ -19,15 +21,16 @@ declare global {
     }
 }
 
-// Basic middleware that just checks for a token and creates a fake admin
+const db = DatabaseConnection.getInstance();
+
+// Validate session token against the database — no fake admins
 export const authenticateAdmin = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-        const token = req.headers.authorization?.replace('Bearer ', '');
-        
-        console.log('Basic auth middleware, token:', token ? 'present' : 'missing');
-        
+        // Prefer httpOnly cookie; fall back to Authorization header for API clients
+        const token = (req as any).cookies?.admin_token
+            || req.headers.authorization?.replace('Bearer ', '');
+
         if (!token) {
-            console.log('No token provided');
             res.status(401).json({
                 success: false,
                 error: 'No token provided'
@@ -35,70 +38,65 @@ export const authenticateAdmin = async (req: Request, res: Response, next: NextF
             return;
         }
 
-        // For now, just decode the basic token and create a fake admin
-        try {
-            const decoded = Buffer.from(token, 'base64').toString('utf-8');
-            const [adminId, username] = decoded.split(':');
-            
-            console.log('Decoded token:', { adminId, username });
-            
-            // Create a basic admin user
-            const admin: AdminUser = {
-                id: adminId,
-                username: username,
-                email: 'admin@captiveportal.local',
-                full_name: 'System Administrator',
-                active: true,
-                locked: false,
-                permissions: ['admin.view', 'user.view', 'package.view', 'session.view', 'admin.create', 'admin.edit', 'admin.delete']
-            };
-            
-            req.admin = admin;
-            console.log('Admin authenticated:', admin.username);
-            next();
-            
-        } catch (decodeError) {
-            console.log('Token decode failed, creating default admin');
-            // If token decode fails, create a default admin
-            const admin: AdminUser = {
-                id: 'default',
-                username: 'admin',
-                email: 'admin@captiveportal.local',
-                full_name: 'System Administrator',
-                active: true,
-                locked: false,
-                permissions: ['admin.view', 'user.view', 'package.view', 'session.view', 'admin.create', 'admin.edit', 'admin.delete']
-            };
-            
-            req.admin = admin;
-            next();
+        const tokenHash = encryptionService.hash(token);
+
+        const result = await db.query(
+            `SELECT au.id, au.username, au.email, au.full_name, au.active, au.locked,
+                    get_admin_permissions(au.id) as permissions
+             FROM admin_sessions s
+             JOIN admin_users au ON s.admin_user_id = au.id
+             WHERE s.token_hash = $1
+               AND s.expires_at > CURRENT_TIMESTAMP
+               AND au.active = true
+               AND au.locked = false`,
+            [tokenHash]
+        );
+
+        if (result.rows.length === 0) {
+            res.status(401).json({
+                success: false,
+                error: 'Invalid or expired session'
+            });
+            return;
         }
-        
+
+        const admin = result.rows[0];
+
+        // Touch last activity
+        await db.query(
+            'UPDATE admin_sessions SET last_activity_at = CURRENT_TIMESTAMP WHERE token_hash = $1',
+            [tokenHash]
+        );
+
+        req.admin = {
+            id: admin.id,
+            username: admin.username,
+            email: admin.email,
+            full_name: admin.full_name,
+            active: admin.active,
+            locked: admin.locked,
+            permissions: admin.permissions || []
+        };
+
+        next();
     } catch (error) {
-        console.error('Auth middleware error:', error);
+        logger.error('Auth middleware error:', error);
         res.status(401).json({
             success: false,
             error: 'Authentication failed'
         });
-        return;
     }
 };
 
 export const requirePermission = (permission: string) => {
     return (req: Request, res: Response, next: NextFunction): void => {
         if (!req.admin) {
-            res.status(401).json({
-                success: false,
-                error: 'Not authenticated'
-            });
+            res.status(401).json({ success: false, error: 'Not authenticated' });
             return;
         }
 
         if (!req.admin.permissions.includes(permission)) {
-            res.status(403).json({
-                success: false,
-                error: 'Permission denied'
-            });
+            res.status(403).json({ success: false, error: 'Permission denied' });
             return;
         }
 
@@ -109,20 +107,14 @@ export const requirePermission = (permission: string) => {
 export const requireAnyPermission = (permissions: string[]) => {
     return (req: Request, res: Response, next: NextFunction): void => {
         if (!req.admin) {
-            res.status(401).json({
-                success: false,
-                error: 'Not authenticated'
-            });
+            res.status(401).json({ success: false, error: 'Not authenticated' });
             return;
         }
 
         const hasPermission = permissions.some(p => req.admin!.permissions.includes(p));
 
         if (!hasPermission) {
-            res.status(403).json({
-                success: false,
-                error: 'Permission denied'
-            });
+            res.status(403).json({ success: false, error: 'Permission denied' });
             return;
         }
 

@@ -15,7 +15,7 @@ interface Payment {
     phone: string;
     amount: number;
     status: string;
-    mpesa_receipt?: string;
+    mpesa_receipt_number?: string;
     mpesa_checkout_request_id?: string;
 }
 
@@ -165,9 +165,9 @@ export class PaymentService {
             const phone = callbackMetadata.find((item: any) => item.Name === 'PhoneNumber')?.Value;
 
             await pool.query(
-                `UPDATE payments 
-                 SET status = 'success', 
-                     mpesa_receipt = $1,
+                `UPDATE payments
+                 SET status = 'success',
+                     mpesa_receipt_number = $1,
                      amount = $2,
                      phone = $3,
                      raw_callback = $4
@@ -180,36 +180,36 @@ export class PaymentService {
             await this.activateSessionAfterPayment(paymentId);
         } else {
             await pool.query(
-                `UPDATE payments 
+                `UPDATE payments
                  SET status = 'failed',
                      raw_callback = $1
                  WHERE id = $2`,
                 [JSON.stringify(callbackData), paymentId]
             );
-
             logger.info(`Payment failed: ${paymentId}, Result Code: ${resultCode}`);
+            await this.deactivateSessionAfterFailure(paymentId);
         }
     }
 
     private async activateSessionAfterPayment(paymentId: string): Promise<void> {
         const result = await pool.query(
-            `SELECT ph.user_id, ph.package_id, ph.session_id
-             FROM purchase_history ph
-             WHERE ph.payment_id = $1 AND ph.session_id IS NOT NULL`,
+            'SELECT id FROM sessions WHERE payment_id = $1 LIMIT 1',
             [paymentId]
         );
-
         if (result.rows.length > 0) {
-            const { session_id } = result.rows[0];
-            
-            await pool.query(
-                `UPDATE sessions 
-                 SET active = true, session_status = 'active'
-                 WHERE id = $1`,
-                [session_id]
-            );
+            await pool.query('UPDATE sessions SET active = true WHERE id = $1', [result.rows[0].id]);
+            logger.info(`Session activated after payment: ${result.rows[0].id}`);
+        }
+    }
 
-            logger.info(`Session activated after payment: ${session_id}`);
+    private async deactivateSessionAfterFailure(paymentId: string): Promise<void> {
+        const result = await pool.query(
+            'SELECT id FROM sessions WHERE payment_id = $1 LIMIT 1',
+            [paymentId]
+        );
+        if (result.rows.length > 0) {
+            await pool.query('UPDATE sessions SET active = false WHERE id = $1', [result.rows[0].id]);
+            logger.info(`Session deactivated after failed payment: ${result.rows[0].id}`);
         }
     }
 
@@ -220,52 +220,36 @@ export class PaymentService {
         deviceId: string,
         routerId: string
     ): Promise<any> {
-        const packageResult = await pool.query(
-            'SELECT price_kes FROM packages WHERE id = $1',
-            [packageId]
+        // Link the payment to this user and package
+        await pool.query(
+            'UPDATE payments SET user_id = $1, package_id = $2 WHERE id = $3',
+            [userId, packageId, paymentId]
         );
-
-        if (packageResult.rows.length === 0) {
-            throw new Error('Package not found');
-        }
-
-        const amount = packageResult.rows[0].price_kes;
 
         const session = await sessionService.createSession(userId, packageId, deviceId, routerId, paymentId);
 
-        const purchaseResult = await pool.query(
-            `INSERT INTO purchase_history (user_id, package_id, payment_id, session_id, amount_paid, status)
-             VALUES ($1, $2, $3, $4, $5, 'pending')
-             RETURNING id, user_id, package_id, payment_id, session_id, amount_paid, status, purchase_date`,
-            [userId, packageId, paymentId, session.id, amount]
-        );
+        logger.info(`Purchase created for user ${userId}, payment ${paymentId}, session ${session.id}`);
 
-        logger.info(`Purchase created for user ${userId}: ${purchaseResult.rows[0].id}`);
-
-        return {
-            purchase: purchaseResult.rows[0],
-            session: session,
-        };
+        return { session };
     }
 
     async getUserPurchaseHistory(userId: string, limit: number = 10): Promise<any[]> {
         const result = await pool.query(
-            `SELECT 
-                ph.id,
+            `SELECT
+                pay.id,
                 p.name as package_name,
-                ph.amount_paid,
-                ph.purchase_date,
-                ph.status,
-                py.mpesa_receipt,
-                s.session_status,
+                pay.amount as amount_paid,
+                pay.created_at as purchase_date,
+                pay.status,
+                pay.mpesa_receipt_number,
+                s.active as session_active,
                 s.start_time,
                 s.end_time
-             FROM purchase_history ph
-             JOIN packages p ON ph.package_id = p.id
-             LEFT JOIN payments py ON ph.payment_id = py.id
-             LEFT JOIN sessions s ON ph.session_id = s.id
-             WHERE ph.user_id = $1
-             ORDER BY ph.purchase_date DESC
+             FROM payments pay
+             JOIN packages p ON pay.package_id = p.id
+             LEFT JOIN sessions s ON s.payment_id = pay.id
+             WHERE pay.user_id = $1
+             ORDER BY pay.created_at DESC
              LIMIT $2`,
             [userId, limit]
         );
@@ -273,11 +257,11 @@ export class PaymentService {
         return result.rows;
     }
 
-    async getPaymentStatus(paymentId: string): Promise<Payment> {
+    async getPaymentStatus(paymentId: string, userId: string): Promise<Payment> {
         const result = await pool.query(
-            `SELECT id, phone, amount, status, mpesa_receipt, mpesa_checkout_request_id
-             FROM payments WHERE id = $1`,
-            [paymentId]
+            `SELECT id, phone, amount, status, mpesa_receipt_number AS mpesa_receipt, mpesa_checkout_request_id
+             FROM payments WHERE id = $1 AND user_id = $2`,
+            [paymentId, userId]
         );
 
         if (result.rows.length === 0) {

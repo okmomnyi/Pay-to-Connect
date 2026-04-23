@@ -24,6 +24,8 @@ CREATE TABLE IF NOT EXISTS users (
     failed_login_attempts INTEGER DEFAULT 0,
     locked_until TIMESTAMP WITH TIME ZONE,
     last_login TIMESTAMP WITH TIME ZONE,
+    profile_completed BOOLEAN DEFAULT false,
+    security_questions_set BOOLEAN DEFAULT false,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
@@ -56,6 +58,7 @@ CREATE TABLE IF NOT EXISTS password_reset_tokens (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     token VARCHAR(255) NOT NULL,
+    token_hash VARCHAR(255),
     used BOOLEAN DEFAULT false,
     expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
@@ -118,6 +121,8 @@ CREATE TABLE IF NOT EXISTS payments (
     package_id UUID REFERENCES packages(id) ON DELETE SET NULL,
     amount DECIMAL(10, 2) NOT NULL,
     phone VARCHAR(20) NOT NULL,
+    mac_address VARCHAR(17),
+    router_id UUID REFERENCES routers(id) ON DELETE SET NULL,
     mpesa_checkout_request_id VARCHAR(255),
     mpesa_receipt_number VARCHAR(255),
     status VARCHAR(20) DEFAULT 'pending',
@@ -236,11 +241,21 @@ CREATE TABLE IF NOT EXISTS router_credentials (
     api_username VARCHAR(100) NOT NULL,
     api_password_encrypted TEXT NOT NULL,
     encryption_iv TEXT NOT NULL,
+    encryption_auth_tag TEXT NOT NULL DEFAULT '',
     connection_timeout INTEGER NOT NULL DEFAULT 10000,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(router_id)
 );
+-- Migration: add encryption_auth_tag if it doesn't exist yet
+DO $$ BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name='router_credentials' AND column_name='encryption_auth_tag'
+    ) THEN
+        ALTER TABLE router_credentials ADD COLUMN encryption_auth_tag TEXT NOT NULL DEFAULT '';
+    END IF;
+END $$;
 
 -- Router Sync Status
 CREATE TABLE IF NOT EXISTS router_sync_status (
@@ -470,8 +485,8 @@ $$ LANGUAGE plpgsql;
 
 -- Insert Default Admin Roles
 INSERT INTO admin_roles (name, description, permissions) VALUES
-    ('SUPER_ADMIN', 'Full system access including all management capabilities', 
-     '["admin.create", "admin.edit", "admin.delete", "admin.view", "user.create", "user.edit", "user.delete", "user.view", "user.disconnect", "package.create", "package.edit", "package.delete", "package.view", "router.create", "router.edit", "router.delete", "router.view", "router.sync", "router.disconnect", "session.view", "session.disconnect", "payment.view", "payment.verify", "estate.create", "estate.edit", "estate.delete", "estate.view", "audit.view", "security.view", "settings.edit"]'),
+    ('SUPER_ADMIN', 'Full system access including all management capabilities',
+     '["admin.create", "admin.edit", "admin.delete", "admin.view", "user.create", "user.edit", "user.delete", "user.view", "user.disconnect", "package.create", "package.edit", "package.delete", "package.view", "router.create", "router.edit", "router.delete", "router.view", "router.sync", "router.disconnect", "session.view", "session.disconnect", "payment.view", "payment.edit", "payment.verify", "payment.refund", "estate.create", "estate.edit", "estate.delete", "estate.view", "analytics.view", "audit.view", "security.view", "settings.edit"]'),
     ('NETWORK_ADMIN', 'Network and router management access',
      '["user.view", "user.disconnect", "package.view", "router.create", "router.edit", "router.view", "router.sync", "router.disconnect", "session.view", "session.disconnect", "estate.view", "audit.view"]'),
     ('SUPPORT_ADMIN', 'Customer support and session management',
@@ -501,6 +516,84 @@ INSERT INTO packages (name, description, duration_minutes, price_kes, data_limit
 ON CONFLICT DO NOTHING;
 
 -- Insert Default Estate
-INSERT INTO estates (name, description, active) VALUES 
+INSERT INTO estates (name, description, active) VALUES
     ('Default Estate', 'Default location for initial setup', true)
 ON CONFLICT (name) DO NOTHING;
+
+-- =====================================================
+-- MIGRATIONS (safe to run on existing databases)
+-- =====================================================
+
+DO $$ BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name='users' AND column_name='profile_completed'
+    ) THEN
+        ALTER TABLE users ADD COLUMN profile_completed BOOLEAN DEFAULT false;
+    END IF;
+END $$;
+
+DO $$ BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name='users' AND column_name='security_questions_set'
+    ) THEN
+        ALTER TABLE users ADD COLUMN security_questions_set BOOLEAN DEFAULT false;
+    END IF;
+END $$;
+
+DO $$ BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name='password_reset_tokens' AND column_name='token_hash'
+    ) THEN
+        ALTER TABLE password_reset_tokens ADD COLUMN token_hash VARCHAR(255);
+    END IF;
+END $$;
+
+DO $$ BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name='payments' AND column_name='mac_address'
+    ) THEN
+        ALTER TABLE payments ADD COLUMN mac_address VARCHAR(17);
+    END IF;
+END $$;
+
+DO $$ BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name='payments' AND column_name='router_id'
+    ) THEN
+        ALTER TABLE payments ADD COLUMN router_id UUID REFERENCES routers(id) ON DELETE SET NULL;
+    END IF;
+END $$;
+
+-- =====================================================
+-- DEFAULT ADMIN USER
+-- Username: admin  |  Default password documented in README — change immediately after first login
+-- =====================================================
+
+INSERT INTO admin_users (username, email, password_hash, full_name, active)
+VALUES (
+    'admin',
+    'admin@smartwifi.local',
+    '$2b$12$UiGjKoGKj/O/ZkyUyqb7IuigXEwSluhWkgnbdeHIPgIAoZFVr.7l6',
+    'System Administrator',
+    true
+)
+ON CONFLICT (username) DO NOTHING;
+
+DO $$
+DECLARE
+    v_admin_id UUID;
+    v_role_id  UUID;
+BEGIN
+    SELECT id INTO v_admin_id FROM admin_users WHERE username = 'admin';
+    SELECT id INTO v_role_id  FROM admin_roles  WHERE name = 'SUPER_ADMIN';
+    IF v_admin_id IS NOT NULL AND v_role_id IS NOT NULL THEN
+        INSERT INTO admin_user_roles (admin_user_id, role_id, granted_by)
+        VALUES (v_admin_id, v_role_id, v_admin_id)
+        ON CONFLICT (admin_user_id, role_id) DO NOTHING;
+    END IF;
+END $$;

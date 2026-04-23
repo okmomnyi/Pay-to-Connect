@@ -1,6 +1,7 @@
 import express from 'express';
+import rateLimit from 'express-rate-limit';
 import { authenticateAdmin, requirePermission, requireAnyPermission } from '../middleware/adminAuthBasic';
-import * as authController from '../controllers/adminAuthControllerBasic';
+import * as authController from '../controllers/adminAuthController';
 import * as dashboardController from '../controllers/adminDashboardController';
 import * as adminUsersController from '../controllers/adminUsersController';
 import * as routersController from '../controllers/adminRoutersController';
@@ -12,10 +13,20 @@ import * as estatesController from '../controllers/adminEstatesController';
 
 const router = express.Router();
 
+// Strict rate limiter for login — 10 attempts per 15 minutes per IP
+const loginLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    message: { success: false, error: 'Too many login attempts, please try again in 15 minutes' },
+    standardHeaders: true,
+    legacyHeaders: false,
+    skipSuccessfulRequests: true,
+});
+
 // =====================================================
 // PUBLIC ROUTES (No authentication required)
 // =====================================================
-router.post('/auth/login', authController.login);
+router.post('/auth/login', loginLimiter, authController.login);
 
 // =====================================================
 // AUTHENTICATED ROUTES (All routes below require authentication)
@@ -47,6 +58,10 @@ router.delete('/routers/:id', requirePermission('router.delete'), routersControl
 router.post('/routers/:id/test', requirePermission('router.view'), routersController.testRouterConnection);
 router.post('/routers/:id/sync', requirePermission('router.sync'), routersController.syncRouterPackages);
 router.post('/routers/:id/disconnect', requirePermission('router.disconnect'), routersController.disconnectUserSession);
+router.get('/routers/:id/setup-script', requirePermission('router.view'), routersController.getRouterSetupScript);
+router.get('/routers/:id/sessions', requirePermission('router.view'), routersController.getRouterActiveSessions);
+router.get('/routers/:id/info', requirePermission('router.view'), routersController.getRouterSystemInfo);
+router.get('/routers/:id/hotspot-users', requirePermission('router.view'), routersController.getRouterHotspotUsers);
 router.get('/routers/:id/logs', requirePermission('audit.view'), routersController.getRouterLogs);
 
 // Packages management routes
@@ -66,17 +81,18 @@ router.get('/users/:id/sessions', requirePermission('user.view'), usersManagemen
 
 // Sessions management routes
 router.get('/sessions', requirePermission('session.view'), sessionsController.getAllSessions);
-router.get('/sessions/:id', requirePermission('session.view'), sessionsController.getSessionById);
-router.post('/sessions/:id/disconnect', requirePermission('session.disconnect'), sessionsController.disconnectSession);
 router.get('/sessions/active', requirePermission('session.view'), sessionsController.getActiveSessions);
 router.get('/sessions/stats', requirePermission('analytics.view'), sessionsController.getSessionStats);
+router.get('/sessions/:id', requirePermission('session.view'), sessionsController.getSessionById);
+router.post('/sessions/:id/disconnect', requirePermission('session.disconnect'), sessionsController.disconnectSession);
 
 // Payments management routes
 router.get('/payments', requirePermission('payment.view'), paymentsController.getAllPayments);
+router.get('/payments/stats', requirePermission('analytics.view'), paymentsController.getPaymentStats);
 router.get('/payments/:id', requirePermission('payment.view'), paymentsController.getPaymentById);
 router.put('/payments/:id/status', requirePermission('payment.edit'), paymentsController.updatePaymentStatus);
 router.post('/payments/:id/refund', requirePermission('payment.refund'), paymentsController.refundPayment);
-router.get('/payments/stats', requirePermission('analytics.view'), paymentsController.getPaymentStats);
+router.post('/payments/:id/reconcile', requirePermission('payment.edit'), paymentsController.reconcilePayment);
 
 // Estates management routes
 router.get('/estates', requirePermission('estate.view'), estatesController.getAllEstates);

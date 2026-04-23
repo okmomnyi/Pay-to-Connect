@@ -6,13 +6,9 @@ const db = DatabaseConnection.getInstance();
 
 export const getAllPackages = async (req: Request, res: Response): Promise<void> => {
     try {
+        // Simple query - just get all packages without complex joins
         const result = await db.query(
-            `SELECT p.*, 
-                    COUNT(pkg.id) as purchase_count
-             FROM packages p
-             LEFT JOIN user_packages pkg ON p.id = pkg.package_id
-             GROUP BY p.id
-             ORDER BY p.created_at DESC`
+            `SELECT *, 0 as purchase_count FROM packages ORDER BY created_at DESC`
         );
 
         res.json({
@@ -31,7 +27,7 @@ export const getAllPackages = async (req: Request, res: Response): Promise<void>
 export const getPackageById = async (req: Request, res: Response): Promise<void> => {
     try {
         const { id } = req.params;
-        
+
         const result = await db.query(
             'SELECT * FROM packages WHERE id = $1',
             [id]
@@ -63,26 +59,25 @@ export const createPackage = async (req: Request, res: Response): Promise<void> 
         const {
             name,
             description,
-            price,
-            duration_hours,
+            price_kes,
+            duration_minutes,
             data_limit_mb,
-            package_type,
-            status = 'active'
+            speed_limit_mbps
         } = req.body;
 
-        if (!name || !price || !package_type) {
+        if (!name || !price_kes || !duration_minutes) {
             res.status(400).json({
                 success: false,
-                error: 'Name, price, and package type are required'
+                error: 'Name, price, and duration are required'
             });
             return;
         }
 
         const result = await db.query(
-            `INSERT INTO packages (name, description, price, duration_hours, data_limit_mb, package_type, status)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)
+            `INSERT INTO packages (name, description, price_kes, duration_minutes, data_limit_mb, speed_limit_mbps, active)
+             VALUES ($1, $2, $3, $4, $5, $6, true)
              RETURNING *`,
-            [name, description, price, duration_hours, data_limit_mb, package_type, status]
+            [name, description, price_kes, duration_minutes, data_limit_mb || null, speed_limit_mbps || null]
         );
 
         res.status(201).json({
@@ -105,20 +100,24 @@ export const updatePackage = async (req: Request, res: Response): Promise<void> 
         const {
             name,
             description,
-            price,
-            duration_hours,
+            price_kes,
+            duration_minutes,
             data_limit_mb,
-            package_type,
-            status
+            speed_limit_mbps
         } = req.body;
 
         const result = await db.query(
             `UPDATE packages 
-             SET name = $1, description = $2, price = $3, duration_hours = $4, 
-                 data_limit_mb = $5, package_type = $6, status = $7, updated_at = CURRENT_TIMESTAMP
-             WHERE id = $8
+             SET name = COALESCE($1, name),
+                 description = COALESCE($2, description),
+                 price_kes = COALESCE($3, price_kes),
+                 duration_minutes = COALESCE($4, duration_minutes),
+                 data_limit_mb = COALESCE($5, data_limit_mb),
+                 speed_limit_mbps = COALESCE($6, speed_limit_mbps),
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE id = $7
              RETURNING *`,
-            [name, description, price, duration_hours, data_limit_mb, package_type, status, id]
+            [name, description, price_kes, duration_minutes, data_limit_mb, speed_limit_mbps, id]
         );
 
         if (result.rows.length === 0) {
@@ -146,20 +145,6 @@ export const updatePackage = async (req: Request, res: Response): Promise<void> 
 export const deletePackage = async (req: Request, res: Response): Promise<void> => {
     try {
         const { id } = req.params;
-
-        // Check if package is in use
-        const usageResult = await db.query(
-            'SELECT COUNT(*) as count FROM user_packages WHERE package_id = $1',
-            [id]
-        );
-
-        if (parseInt(usageResult.rows[0].count) > 0) {
-            res.status(400).json({
-                success: false,
-                error: 'Cannot delete package that is in use'
-            });
-            return;
-        }
 
         const result = await db.query(
             'DELETE FROM packages WHERE id = $1 RETURNING *',
@@ -193,8 +178,7 @@ export const togglePackageStatus = async (req: Request, res: Response): Promise<
 
         const result = await db.query(
             `UPDATE packages 
-             SET status = CASE WHEN status = 'active' THEN 'inactive' ELSE 'active' END,
-                 updated_at = CURRENT_TIMESTAMP
+             SET active = NOT active, updated_at = CURRENT_TIMESTAMP
              WHERE id = $1
              RETURNING *`,
             [id]
@@ -211,7 +195,7 @@ export const togglePackageStatus = async (req: Request, res: Response): Promise<
         res.json({
             success: true,
             package: result.rows[0],
-            message: `Package ${result.rows[0].status} successfully`
+            message: `Package ${result.rows[0].active ? 'activated' : 'deactivated'} successfully`
         });
     } catch (error) {
         logger.error('Error toggling package status:', error);

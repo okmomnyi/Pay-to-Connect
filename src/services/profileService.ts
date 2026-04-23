@@ -18,12 +18,12 @@ export interface UserProfile {
 }
 
 export interface SecurityQuestion {
-    id: number;
+    id: string;
     question: string;
 }
 
 export interface UserSecurityAnswer {
-    question_id: number;
+    question_id: string;
     question: string;
     answer_hash: string;
 }
@@ -108,7 +108,7 @@ class ProfileService {
         }
     }
 
-    async setUserSecurityAnswers(userId: string, answers: { question_id: number; answer: string }[]): Promise<void> {
+    async setUserSecurityAnswers(userId: string, answers: { question_id: string; answer: string }[]): Promise<void> {
         const client = await pool.connect();
         try {
             await client.query('BEGIN');
@@ -157,7 +157,7 @@ class ProfileService {
         }
     }
 
-    async verifySecurityAnswers(userId: string, answers: { question_id: number; answer: string }[]): Promise<boolean> {
+    async verifySecurityAnswers(userId: string, answers: { question_id: string; answer: string }[]): Promise<boolean> {
         try {
             for (const answer of answers) {
                 const result = await pool.query(

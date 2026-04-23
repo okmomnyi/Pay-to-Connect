@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
 import authController from '../controllers/authController';
 import packageController from '../controllers/packageController';
 import sessionController from '../controllers/sessionController';
@@ -6,16 +7,35 @@ import paymentController from '../controllers/paymentController';
 import UserProfileController from '../controllers/userProfileController';
 import UsageTrackingController from '../controllers/usageTrackingController';
 import { authenticate } from '../middleware/authMiddleware';
+import { validateMpesaCallback, preventDuplicateCallback } from '../middleware/mpesaAuth';
 
 const router = Router();
 const profileController = new UserProfileController();
 const usageController = new UsageTrackingController();
 
-router.post('/auth/register', authController.register);
+// Strict rate limiter for registration — 10 accounts per hour per IP
+const registerLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000,
+    max: 10,
+    message: { success: false, error: 'Too many registration attempts, please try again later' },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
+// Strict rate limiter for password reset — 5 requests per hour per IP
+const passwordResetLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000,
+    max: 5,
+    message: { success: false, error: 'Too many password reset requests, please try again later' },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
+router.post('/auth/register', registerLimiter, authController.register);
 router.post('/auth/login', authController.login);
 router.post('/auth/logout', authenticate, authController.logout);
 router.post('/auth/change-password', authenticate, authController.changePassword);
-router.post('/auth/request-password-reset', authController.requestPasswordReset);
+router.post('/auth/request-password-reset', passwordResetLimiter, authController.requestPasswordReset);
 router.post('/auth/reset-password', authController.resetPassword);
 
 // Profile management routes
@@ -46,6 +66,6 @@ router.post('/purchase/initiate', authenticate, paymentController.initiatePurcha
 router.get('/purchase/history', authenticate, paymentController.getPurchaseHistory);
 router.get('/payment/:paymentId/status', authenticate, paymentController.getPaymentStatus);
 
-router.post('/mpesa/callback', paymentController.handleMpesaCallback);
+router.post('/mpesa/callback', validateMpesaCallback, preventDuplicateCallback, paymentController.handleMpesaCallback);
 
 export default router;
