@@ -48,14 +48,14 @@ export const getDashboardStats = async (req: Request, res: Response): Promise<vo
             const totalRevenueResult = await db.query(
                 `SELECT COALESCE(SUM(amount), 0) as total 
                  FROM payments 
-                 WHERE status = 'completed'`
+                 WHERE status = 'success'`
             );
             totalRevenue = parseFloat(totalRevenueResult.rows[0]?.total || '0');
 
             const revenueTodayResult = await db.query(
                 `SELECT COALESCE(SUM(amount), 0) as total 
                  FROM payments 
-                 WHERE status = 'completed' 
+                 WHERE status = 'success' 
                  AND DATE(created_at) = CURRENT_DATE`
             );
             revenueToday = parseFloat(revenueTodayResult.rows[0]?.total || '0');
@@ -63,7 +63,7 @@ export const getDashboardStats = async (req: Request, res: Response): Promise<vo
             const revenueMonthResult = await db.query(
                 `SELECT COALESCE(SUM(amount), 0) as total 
                  FROM payments 
-                 WHERE status = 'completed' 
+                 WHERE status = 'success' 
                  AND DATE_TRUNC('month', created_at) = DATE_TRUNC('month', CURRENT_DATE)`
             );
             revenueMonth = parseFloat(revenueMonthResult.rows[0]?.total || '0');
@@ -78,7 +78,7 @@ export const getDashboardStats = async (req: Request, res: Response): Promise<vo
             const packagesTodayResult = await db.query(
                 `SELECT COUNT(*) as count 
                  FROM payments 
-                 WHERE status = 'completed' 
+                 WHERE status = 'success' 
                  AND DATE(created_at) = CURRENT_DATE`
             );
             packagesSoldToday = parseInt(packagesTodayResult.rows[0]?.count || '0');
@@ -86,7 +86,7 @@ export const getDashboardStats = async (req: Request, res: Response): Promise<vo
             const packagesMonthResult = await db.query(
                 `SELECT COUNT(*) as count 
                  FROM payments 
-                 WHERE status = 'completed' 
+                 WHERE status = 'success' 
                  AND DATE_TRUNC('month', created_at) = DATE_TRUNC('month', CURRENT_DATE)`
             );
             packagesSoldMonth = parseInt(packagesMonthResult.rows[0]?.count || '0');
@@ -146,7 +146,7 @@ export const getDashboardStats = async (req: Request, res: Response): Promise<vo
             const popularPackagesResult = await db.query(
                 `SELECT pkg.id, pkg.name, pkg.price_kes, COUNT(p.id) as sales
                  FROM packages pkg
-                 LEFT JOIN payments p ON pkg.id = p.package_id AND p.status = 'completed'
+                 LEFT JOIN payments p ON pkg.id = p.package_id AND p.status = 'success'
                  WHERE pkg.active = true
                  GROUP BY pkg.id, pkg.name, pkg.price_kes
                  ORDER BY sales DESC
@@ -224,7 +224,7 @@ export const getRecentActivity = async (req: Request, res: Response): Promise<vo
                         u.username,
                         'payment' as action_type,
                         'payment' as resource_type,
-                        (p.status = 'completed') as success,
+                        (p.status = 'success') as success,
                         p.created_at,
                         json_build_object('amount', p.amount, 'status', p.status) as action_details
                      FROM payments p

@@ -92,6 +92,7 @@ router.get('/payments/stats', requirePermission('analytics.view'), paymentsContr
 router.get('/payments/:id', requirePermission('payment.view'), paymentsController.getPaymentById);
 router.put('/payments/:id/status', requirePermission('payment.edit'), paymentsController.updatePaymentStatus);
 router.post('/payments/:id/refund', requirePermission('payment.refund'), paymentsController.refundPayment);
+router.post('/payments/:id/reconcile', requirePermission('payment.edit'), paymentsController.reconcilePayment);
 
 // Estates management routes
 router.get('/estates', requirePermission('estate.view'), estatesController.getAllEstates);

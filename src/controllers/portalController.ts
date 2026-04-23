@@ -234,38 +234,88 @@ class PortalController {
 
     public getPaymentStatus = async (req: any, res: Response): Promise<void> => {
         try {
-            // Check if user is authenticated
             if (!req.user || !req.user.userId) {
-                res.status(401).json({
-                    success: false,
-                    error: 'Authentication required'
-                });
+                res.status(401).json({ success: false, error: 'Authentication required' });
                 return;
             }
 
             const { checkoutRequestId } = req.params;
-
             if (!checkoutRequestId) {
-                res.status(400).json({
-                    success: false,
-                    error: 'Checkout request ID is required'
-                });
+                res.status(400).json({ success: false, error: 'Checkout request ID is required' });
                 return;
             }
 
-            const paymentStatus = await this.mpesaService.getPaymentStatus(checkoutRequestId);
+            // Read current DB state
+            const paymentRow = await this.db.query(
+                `SELECT id, user_id, package_id, mac_address, router_id, status, created_at
+                 FROM payments WHERE mpesa_checkout_request_id = $1`,
+                [checkoutRequestId]
+            );
 
-            if (paymentStatus.status === 'not_found') {
-                res.status(404).json({
-                    success: false,
-                    error: 'Payment not found'
-                });
+            if (paymentRow.rows.length === 0) {
+                res.status(404).json({ success: false, error: 'Payment not found' });
                 return;
             }
 
+            const payment = paymentRow.rows[0];
+            let currentStatus = payment.status;
+
+            // If still pending and at least 10 seconds old, query Safaricom directly
+            // This handles cases where the callback was never received
+            if (currentStatus === 'pending') {
+                const ageSeconds = (Date.now() - new Date(payment.created_at).getTime()) / 1000;
+                if (ageSeconds >= 10) {
+                    const stkQuery = await this.mpesaService.queryStkStatus(checkoutRequestId);
+                    if (stkQuery.success && stkQuery.resultCode !== undefined) {
+                        if (stkQuery.resultCode === 0) {
+                            // Payment succeeded but callback was never received — process it now
+                            await this.db.query(
+                                `UPDATE payments SET status = 'success', updated_at = NOW() WHERE id = $1 AND status = 'pending'`,
+                                [payment.id]
+                            );
+                            currentStatus = 'success';
+                            logger.info(`Payment ${payment.id} reconciled to success via STK Query`);
+
+                            // Create session if context is available
+                            if (payment.mac_address && payment.package_id) {
+                                let routerIp: string | null = null;
+                                if (payment.router_id) {
+                                    const rRow = await this.db.query(
+                                        'SELECT ip_address FROM routers WHERE id = $1',
+                                        [payment.router_id]
+                                    );
+                                    routerIp = rRow.rows[0]?.ip_address ?? null;
+                                }
+                                const sr = await this.radiusService.createSession(
+                                    payment.mac_address,
+                                    payment.package_id,
+                                    payment.id,
+                                    routerIp || '0.0.0.0',
+                                    payment.user_id
+                                );
+                                if (sr.success) {
+                                    logger.info(`Session ${sr.sessionId} created via STK Query reconciliation`);
+                                } else {
+                                    logger.error(`Session creation failed during reconciliation: ${sr.error}`);
+                                }
+                            }
+                        } else if (stkQuery.resultCode !== undefined) {
+                            // Definitive failure returned by Safaricom
+                            await this.db.query(
+                                `UPDATE payments SET status = 'failed', updated_at = NOW() WHERE id = $1 AND status = 'pending'`,
+                                [payment.id]
+                            );
+                            currentStatus = 'failed';
+                            logger.info(`Payment ${payment.id} reconciled to failed via STK Query (ResultCode=${stkQuery.resultCode})`);
+                        }
+                        // If queryStkStatus returned success=false or ambiguous, leave as pending
+                    }
+                }
+            }
+
+            // Fetch session info if payment succeeded
             let sessionInfo = null;
-            if (paymentStatus.status === 'success' && paymentStatus.paymentId) {
-                // Get session information
+            if (currentStatus === 'success') {
                 const sessionResult = await this.db.query(`
                     SELECT s.id, s.end_time, p.name as package_name,
                            EXTRACT(EPOCH FROM (s.end_time - NOW()))::INTEGER as remaining_seconds
@@ -273,7 +323,7 @@ class PortalController {
                     JOIN packages p ON s.package_id = p.id
                     WHERE s.payment_id = $1 AND s.active = true
                     LIMIT 1
-                `, [paymentStatus.paymentId]);
+                `, [payment.id]);
 
                 if (sessionResult.rows.length > 0) {
                     const session = sessionResult.rows[0];
@@ -286,17 +336,10 @@ class PortalController {
                 }
             }
 
-            res.json({
-                success: true,
-                status: paymentStatus.status,
-                session: sessionInfo
-            });
+            res.json({ success: true, status: currentStatus, session: sessionInfo });
         } catch (error) {
             logger.error('Failed to get payment status:', error);
-            res.status(500).json({
-                success: false,
-                error: 'Internal server error'
-            });
+            res.status(500).json({ success: false, error: 'Internal server error' });
         }
     };
 

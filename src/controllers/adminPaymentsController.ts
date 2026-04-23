@@ -1,8 +1,12 @@
 import { Request, Response } from 'express';
 import DatabaseConnection from '../database/connection';
+import MpesaService from '../services/mpesa';
+import RadiusService from '../services/radius';
 import { logger } from '../utils/logger';
 
 const db = DatabaseConnection.getInstance();
+const mpesaService = new MpesaService();
+const radiusService = new RadiusService();
 
 export const getAllPayments = async (req: Request, res: Response): Promise<void> => {
     try {
@@ -140,7 +144,7 @@ export const updatePaymentStatus = async (req: Request, res: Response): Promise<
         const { id } = req.params;
         const { status } = req.body;
 
-        if (!['pending', 'completed', 'failed', 'refunded'].includes(status)) {
+        if (!['pending', 'success', 'failed', 'refunded'].includes(status)) {
             res.status(400).json({
                 success: false,
                 error: 'Invalid status'
@@ -184,7 +188,7 @@ export const getPaymentStats = async (req: Request, res: Response): Promise<void
 
         let statsData = {
             total_payments: 0,
-            completed_payments: 0,
+            success_payments: 0,
             pending_payments: 0,
             failed_payments: 0,
             refunded_payments: 0,
@@ -208,12 +212,12 @@ export const getPaymentStats = async (req: Request, res: Response): Promise<void
             const stats = await db.query(`
                 SELECT 
                     COUNT(*) as total_payments,
-                    COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_payments,
+                    COUNT(CASE WHEN status = 'success' THEN 1 END) as success_payments,
                     COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending_payments,
                     COUNT(CASE WHEN status = 'failed' THEN 1 END) as failed_payments,
                     COUNT(CASE WHEN status = 'refunded' THEN 1 END) as refunded_payments,
-                    COALESCE(SUM(CASE WHEN status = 'completed' THEN amount ELSE 0 END), 0) as total_revenue,
-                    COALESCE(AVG(CASE WHEN status = 'completed' THEN amount ELSE NULL END), 0) as avg_payment_amount
+                    COALESCE(SUM(CASE WHEN status = 'success' THEN amount ELSE 0 END), 0) as total_revenue,
+                    COALESCE(AVG(CASE WHEN status = 'success' THEN amount ELSE NULL END), 0) as avg_payment_amount
                 FROM payments
                 WHERE 1=1 ${dateFilter}
             `);
@@ -223,7 +227,7 @@ export const getPaymentStats = async (req: Request, res: Response): Promise<void
                 SELECT 
                     DATE(created_at) as date,
                     COUNT(*) as payments_count,
-                    COALESCE(SUM(CASE WHEN status = 'completed' THEN amount ELSE 0 END), 0) as revenue
+                    COALESCE(SUM(CASE WHEN status = 'success' THEN amount ELSE 0 END), 0) as revenue
                 FROM payments
                 WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'
                 GROUP BY DATE(created_at)
@@ -251,6 +255,88 @@ export const getPaymentStats = async (req: Request, res: Response): Promise<void
     }
 };
 
+export const reconcilePayment = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { id } = req.params;
+
+        const paymentResult = await db.query(
+            `SELECT id, user_id, package_id, mac_address, router_id, status, mpesa_checkout_request_id
+             FROM payments WHERE id = $1`,
+            [id]
+        );
+
+        if (paymentResult.rows.length === 0) {
+            res.status(404).json({ success: false, error: 'Payment not found' });
+            return;
+        }
+
+        const payment = paymentResult.rows[0];
+
+        if (payment.status !== 'pending') {
+            res.json({ success: true, message: `Payment is already ${payment.status} — no reconciliation needed`, status: payment.status });
+            return;
+        }
+
+        if (!payment.mpesa_checkout_request_id) {
+            res.status(400).json({ success: false, error: 'Payment has no CheckoutRequestID to query' });
+            return;
+        }
+
+        const stkQuery = await mpesaService.queryStkStatus(payment.mpesa_checkout_request_id);
+        if (!stkQuery.success) {
+            res.status(502).json({ success: false, error: stkQuery.error || 'Safaricom query failed' });
+            return;
+        }
+
+        let newStatus = 'pending';
+        let sessionCreated = false;
+
+        if (stkQuery.resultCode === 0) {
+            await db.query(
+                `UPDATE payments SET status = 'success', updated_at = NOW() WHERE id = $1 AND status = 'pending'`,
+                [payment.id]
+            );
+            newStatus = 'success';
+
+            if (payment.mac_address && payment.package_id) {
+                let routerIp: string | null = null;
+                if (payment.router_id) {
+                    const rRow = await db.query('SELECT ip_address FROM routers WHERE id = $1', [payment.router_id]);
+                    routerIp = rRow.rows[0]?.ip_address ?? null;
+                }
+                const sr = await radiusService.createSession(
+                    payment.mac_address,
+                    payment.package_id,
+                    payment.id,
+                    routerIp || '0.0.0.0',
+                    payment.user_id
+                );
+                sessionCreated = sr.success;
+                if (!sr.success) logger.error(`Reconcile: session creation failed for payment ${payment.id}: ${sr.error}`);
+            }
+            logger.info(`Admin reconciled payment ${payment.id} → success. Session created: ${sessionCreated}`);
+        } else {
+            await db.query(
+                `UPDATE payments SET status = 'failed', updated_at = NOW() WHERE id = $1 AND status = 'pending'`,
+                [payment.id]
+            );
+            newStatus = 'failed';
+            logger.info(`Admin reconciled payment ${payment.id} → failed (ResultCode=${stkQuery.resultCode})`);
+        }
+
+        res.json({
+            success: true,
+            newStatus,
+            sessionCreated,
+            safaricomResultCode: stkQuery.resultCode,
+            safaricomResultDesc: stkQuery.resultDesc
+        });
+    } catch (error) {
+        logger.error('Error reconciling payment:', error);
+        res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+};
+
 export const refundPayment = async (req: Request, res: Response): Promise<void> => {
     try {
         const { id } = req.params;
@@ -272,10 +358,10 @@ export const refundPayment = async (req: Request, res: Response): Promise<void> 
 
         const payment = paymentResult.rows[0];
 
-        if (payment.status !== 'completed') {
+        if (payment.status !== 'success') {
             res.status(400).json({
                 success: false,
-                error: 'Only completed payments can be refunded'
+                error: 'Only successful payments can be refunded'
             });
             return;
         }

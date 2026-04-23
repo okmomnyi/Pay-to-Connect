@@ -332,6 +332,53 @@ class MpesaService {
         }
     }
 
+    public async queryStkStatus(checkoutRequestId: string): Promise<{
+        success: boolean;
+        resultCode?: number;
+        resultDesc?: string;
+        error?: string;
+    }> {
+        try {
+            if (!this.isConfigured) {
+                return { success: false, error: 'M-Pesa not configured' };
+            }
+            const accessToken = await this.getAccessToken();
+            const { password, timestamp } = this.generatePassword();
+
+            const response = await axios.post(
+                `${this.baseUrl}/mpesa/stkpushquery/v1/query`,
+                {
+                    BusinessShortCode: this.shortcode,
+                    Password: password,
+                    Timestamp: timestamp,
+                    CheckoutRequestID: checkoutRequestId
+                },
+                {
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    timeout: 15000
+                }
+            );
+
+            const data = response.data;
+            logger.info(`STK Query result for ${checkoutRequestId}:`, {
+                ResultCode: data.ResultCode,
+                ResultDesc: data.ResultDesc
+            });
+
+            return {
+                success: true,
+                resultCode: parseInt(data.ResultCode ?? '1'),
+                resultDesc: data.ResultDesc
+            };
+        } catch (error: any) {
+            logger.error('STK Query failed:', error?.response?.data || error.message);
+            return { success: false, error: 'Failed to query payment status from Safaricom' };
+        }
+    }
+
     public async verifyPayment(paymentId: string): Promise<boolean> {
         try {
             const result = await this.db.query(

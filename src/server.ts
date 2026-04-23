@@ -40,6 +40,10 @@ class Server {
     }
 
     private setupMiddleware(): void {
+        // Trust the first proxy so req.ip reflects the real client IP (from X-Forwarded-For)
+        // Must be set before rate limiter and IP-based middleware
+        this.app.set('trust proxy', 1);
+
         // Security middleware
         this.app.use(helmet({
             contentSecurityPolicy: {
@@ -104,7 +108,7 @@ class Server {
             allowedHeaders: ['Content-Type', 'Authorization']
         }));
 
-        // Rate limiting
+        // Rate limiting — M-Pesa callback routes are exempt so Safaricom can always reach them
         const generalLimiter = rateLimit({
             windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000'), // 15 minutes
             max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100'),
@@ -114,6 +118,7 @@ class Server {
             },
             standardHeaders: true,
             legacyHeaders: false,
+            skip: (req) => req.path.startsWith('/callbacks/mpesa'),
         });
 
         this.app.use(generalLimiter);
@@ -125,12 +130,15 @@ class Server {
         this.app.use(express.json({ limit: '10mb' }));
         this.app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-        // Input sanitization
-        this.app.use(sanitizeInput);
-        this.app.use(validateNoSQLInjection);
-
-        // Trust proxy for accurate IP addresses
-        this.app.set('trust proxy', 1);
+        // Input sanitization — skip M-Pesa callback routes to prevent body modification
+        this.app.use((req, res, next) => {
+            if (req.path.startsWith('/callbacks/mpesa')) return next();
+            return sanitizeInput(req, res, next);
+        });
+        this.app.use((req, res, next) => {
+            if (req.path.startsWith('/callbacks/mpesa')) return next();
+            return validateNoSQLInjection(req, res, next);
+        });
 
         // Request logging
         this.app.use((req, res, next) => {
