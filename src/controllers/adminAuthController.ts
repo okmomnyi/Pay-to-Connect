@@ -27,7 +27,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
             return;
         }
 
-        const isProduction = process.env.NODE_ENV === 'production';
+        const isProduction = false; // forced off for HTTP testing
 
         // Set token in httpOnly cookie — not accessible to JavaScript
         res.cookie('admin_token', result.token!, {

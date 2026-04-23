@@ -46,30 +46,11 @@ class Server {
 
         // Security middleware
         this.app.use(helmet({
-            contentSecurityPolicy: {
-                directives: {
-                    defaultSrc: ["'self'"],
-                    styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.tailwindcss.com", "https://cdnjs.cloudflare.com"],
-                    scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://cdn.tailwindcss.com"],
-                    scriptSrcAttr: ["'unsafe-inline'"],
-                    imgSrc: ["'self'", "data:", "https:"],
-                    connectSrc: ["'self'"],
-                    fontSrc: ["'self'", "https://cdnjs.cloudflare.com", "data:"],
-                    objectSrc: ["'none'"],
-                    mediaSrc: ["'self'"],
-                    frameSrc: ["'none'"],
-                    baseUri: ["'self'"],
-                    formAction: ["'self'"],
-                },
-            },
-            hsts: {
-                maxAge: 31536000,
-                includeSubDomains: true,
-                preload: true
-            },
-            noSniff: true,
-            referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
-            xssFilter: true,
+            contentSecurityPolicy: false,
+            hsts: false,
+            crossOriginOpenerPolicy: false,
+            crossOriginResourcePolicy: false,
+            originAgentCluster: false,
         }));
 
         // CORS configuration — never default to wildcard
