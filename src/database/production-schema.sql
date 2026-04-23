@@ -112,6 +112,37 @@ CREATE TABLE IF NOT EXISTS devices (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+
+-- Routers Table
+
+-- Estates Table
+CREATE TABLE IF NOT EXISTS estates (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(255) UNIQUE NOT NULL,
+    description TEXT,
+    address TEXT,
+    active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Routers Table
+CREATE TABLE IF NOT EXISTS routers (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    estate_id UUID REFERENCES estates(id) ON DELETE SET NULL,
+    name VARCHAR(255) NOT NULL,
+    ip_address INET NOT NULL,
+    api_port INTEGER NOT NULL DEFAULT 8729,
+    description TEXT,
+    active BOOLEAN DEFAULT true,
+    connection_status VARCHAR(20) DEFAULT 'unknown',
+    last_sync_at TIMESTAMP WITH TIME ZONE,
+    last_health_check TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(ip_address, api_port)
+);
+
 -- =====================================================
 -- PAYMENTS TABLE
 -- =====================================================
@@ -207,32 +238,7 @@ CREATE TABLE IF NOT EXISTS admin_sessions (
 -- =====================================================
 
 -- Estates/Locations Table
-CREATE TABLE IF NOT EXISTS estates (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name VARCHAR(255) UNIQUE NOT NULL,
-    description TEXT,
-    address TEXT,
-    active BOOLEAN DEFAULT true,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
 
--- Routers Table
-CREATE TABLE IF NOT EXISTS routers (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    estate_id UUID REFERENCES estates(id) ON DELETE SET NULL,
-    name VARCHAR(255) NOT NULL,
-    ip_address INET NOT NULL,
-    api_port INTEGER NOT NULL DEFAULT 8729,
-    description TEXT,
-    active BOOLEAN DEFAULT true,
-    connection_status VARCHAR(20) DEFAULT 'unknown',
-    last_sync_at TIMESTAMP WITH TIME ZONE,
-    last_health_check TIMESTAMP WITH TIME ZONE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(ip_address, api_port)
-);
 
 -- Router Credentials Table (Encrypted Storage)
 CREATE TABLE IF NOT EXISTS router_credentials (
