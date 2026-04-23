@@ -124,6 +124,24 @@ export const getDashboardStats = async (req: Request, res: Response): Promise<vo
             logger.warn('Routers table query failed, using defaults');
         }
 
+        // Get daily revenue for the last 7 days (Revenue Flow chart)
+        let weeklyRevenue: any[] = [];
+        try {
+            const weeklyRevenueResult = await db.query(
+                `SELECT
+                    DATE(created_at) as date,
+                    COALESCE(SUM(CASE WHEN status = 'success' THEN amount ELSE 0 END), 0) as amount,
+                    COUNT(CASE WHEN status = 'success' THEN 1 END) as count
+                 FROM payments
+                 WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'
+                 GROUP BY DATE(created_at)
+                 ORDER BY date ASC`
+            );
+            weeklyRevenue = weeklyRevenueResult.rows;
+        } catch (e) {
+            logger.warn('Weekly revenue query failed');
+        }
+
         // Get recent payments
         let recentPayments: any[] = [];
         try {
@@ -170,7 +188,8 @@ export const getDashboardStats = async (req: Request, res: Response): Promise<vo
                 revenue: {
                     total: totalRevenue,
                     today: revenueToday,
-                    month: revenueMonth
+                    month: revenueMonth,
+                    week_daily: weeklyRevenue
                 },
                 packages: {
                     soldToday: packagesSoldToday,
