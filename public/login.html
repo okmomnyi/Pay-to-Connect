@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SmartWiFi — Login</title>
-  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;500;700&family=JetBrains+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet"/>
   <script>
@@ -60,20 +60,23 @@
       border-radius: 0.75rem;
     }
     .glass-input {
-      background-color: #13121c;
-      border: 1px solid rgba(72,71,81,0.15);
-      color: #e7e4f0;
-      border-radius: 0.75rem;
-      padding: 0.875rem 1.25rem;
+      background-color: #13121c !important;
+      border: 1px solid rgba(72,71,81,0.35) !important;
+      color: #e7e4f0 !important;
+      border-radius: 0.75rem !important;
+      padding: 0.875rem 1.25rem !important;
       width: 100%;
-      transition: all 0.3s ease;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      -webkit-appearance: none;
+      appearance: none;
     }
     .glass-input:focus {
-      outline: none;
-      border-color: #C2777A;
-      box-shadow: 0 0 0 2px rgba(194,119,122,0.2);
+      outline: none !important;
+      border-color: #C2777A !important;
+      box-shadow: 0 0 0 2px rgba(194,119,122,0.2) !important;
+      background-color: #191923 !important;
     }
-    .glass-input::placeholder { color: #76747f; }
+    .glass-input::placeholder { color: rgba(172,170,181,0.55) !important; }
 
     .btn-gradient { background: linear-gradient(135deg, #C2777A, #E8A598); color: #4a1c1f; }
     .text-gradient {
@@ -124,24 +127,18 @@
     <form id="loginForm" class="flex flex-col gap-5">
       <div class="flex flex-col gap-2">
         <label class="text-xs font-semibold text-on-surface-variant uppercase tracking-wider pl-1">Username or Email</label>
-        <div class="relative">
-          <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline text-sm pointer-events-none">person</span>
-          <input type="text" id="loginUsername" class="glass-input" style="padding-left:3rem;" placeholder="Username or email" required/>
-        </div>
+        <input type="text" id="loginUsername" class="glass-input" placeholder="Username or email" required/>
       </div>
       <div class="flex flex-col gap-2">
         <div class="flex justify-between items-center pl-1 pr-1">
           <label class="text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Password</label>
           <a href="/forgot-password" class="text-xs text-primary hover:text-secondary transition-colors">Forgot?</a>
         </div>
-        <div class="relative">
-          <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline text-sm pointer-events-none">lock</span>
-          <input type="password" id="loginPassword" class="glass-input" style="padding-left:3rem;" placeholder="Password" required/>
-        </div>
+        <input type="password" id="loginPassword" class="glass-input" placeholder="Password" required/>
       </div>
       <button type="submit" id="loginButton"
-        class="w-full py-3.5 rounded-xl btn-gradient font-bold text-sm flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(194,119,122,0.2)] hover:shadow-[0_0_30px_rgba(194,119,122,0.4)] transition-all mt-1 group">
-        <span class="material-symbols-outlined text-sm group-hover:translate-x-0.5 transition-transform">login</span> Sign In
+        class="w-full py-3.5 rounded-xl btn-gradient font-bold text-sm flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(194,119,122,0.2)] hover:shadow-[0_0_30px_rgba(194,119,122,0.4)] transition-all mt-1">
+        Sign In
       </button>
     </form>
 
@@ -150,26 +147,20 @@
       <div class="grid grid-cols-2 gap-3">
         <div class="flex flex-col gap-1.5">
           <label class="text-xs font-semibold text-on-surface-variant uppercase tracking-wider pl-1">First Name</label>
-          <input type="text" id="firstName" class="glass-input" style="padding-left:1rem;" placeholder="First name" required/>
+          <input type="text" id="firstName" class="glass-input" placeholder="First name" required/>
         </div>
         <div class="flex flex-col gap-1.5">
           <label class="text-xs font-semibold text-on-surface-variant uppercase tracking-wider pl-1">Last Name</label>
-          <input type="text" id="lastName" class="glass-input" style="padding-left:1rem;" placeholder="Last name" required/>
+          <input type="text" id="lastName" class="glass-input" placeholder="Last name" required/>
         </div>
       </div>
       <div class="flex flex-col gap-2">
         <label class="text-xs font-semibold text-on-surface-variant uppercase tracking-wider pl-1">Username</label>
-        <div class="relative">
-          <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline text-sm pointer-events-none">alternate_email</span>
-          <input type="text" id="registerUsername" class="glass-input" style="padding-left:3rem;" placeholder="Choose a username" required/>
-        </div>
+        <input type="text" id="registerUsername" class="glass-input" placeholder="Choose a username" required/>
       </div>
       <div class="flex flex-col gap-2">
         <label class="text-xs font-semibold text-on-surface-variant uppercase tracking-wider pl-1">Email</label>
-        <div class="relative">
-          <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline text-sm pointer-events-none">mail</span>
-          <input type="email" id="email" class="glass-input" style="padding-left:3rem;" placeholder="Email address" required/>
-        </div>
+        <input type="email" id="email" class="glass-input" placeholder="Email address" required/>
       </div>
       <div class="flex flex-col gap-2">
         <label class="text-xs font-semibold text-on-surface-variant uppercase tracking-wider pl-1">Phone Number</label>
@@ -180,21 +171,18 @@
       </div>
       <div class="flex flex-col gap-2">
         <label class="text-xs font-semibold text-on-surface-variant uppercase tracking-wider pl-1">Password</label>
-        <div class="relative">
-          <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline text-sm pointer-events-none">lock</span>
-          <input type="password" id="registerPassword" class="glass-input" style="padding-left:3rem;" placeholder="Min 8 characters" required/>
-        </div>
+        <input type="password" id="registerPassword" class="glass-input" placeholder="Min 8 characters" required/>
       </div>
       <button type="submit" id="registerButton"
-        class="w-full py-3.5 rounded-xl btn-gradient font-bold text-sm flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(194,119,122,0.2)] hover:shadow-[0_0_30px_rgba(194,119,122,0.4)] transition-all mt-1 group">
-        <span class="material-symbols-outlined text-sm group-hover:translate-x-0.5 transition-transform">person_add</span> Create Account
+        class="w-full py-3.5 rounded-xl btn-gradient font-bold text-sm flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(194,119,122,0.2)] hover:shadow-[0_0_30px_rgba(194,119,122,0.4)] transition-all mt-1">
+        Create Account
       </button>
     </form>
 
     <!-- Footer -->
     <div class="pt-4 border-t border-[rgba(72,71,81,0.15)] text-center">
-      <a href="/" class="text-xs text-on-surface-variant hover:text-primary transition-colors inline-flex items-center gap-1">
-        <span class="material-symbols-outlined text-xs">arrow_back</span> Back to Portal
+      <a href="/" class="text-xs text-on-surface-variant hover:text-primary transition-colors">
+        ← Back to Portal
       </a>
     </div>
 
